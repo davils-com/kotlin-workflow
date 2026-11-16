@@ -20,6 +20,11 @@ gradle:
 
 working-directory: "."
 
+code-scanning:
+  # Code scanning refuses a finding without a location. A finding that names no file, such as
+  # one about a dependency, is filed under this file. Empty leaves such a finding as it is.
+  fallback-location: gradle/libs.versions.toml
+
 # Environment variables of every Gradle invocation.
 env: {}
 
@@ -159,6 +164,9 @@ check:
     assurance: true
   reproducible:
     enabled: false
+    # Run before each of the two builds, as an invocation of its own: Gradle does not order a
+    # clean before the tasks of an included build, and would delete what was just built.
+    clean-tasks: [clean]
     tasks: [jar]
     artifacts: ["**/build/libs/*.jar"]
 

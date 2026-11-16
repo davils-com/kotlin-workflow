@@ -93,6 +93,7 @@ jobs:
           glob: ${{ fromJSON(env.KW_CONFIG).security.gradle.sarif }}
           category: kreate-assurance
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          fallback-location: ${{ fromJSON(env.KW_CONFIG).code-scanning.fallback-location }}
 
       - name: Report
         if: ${{ !cancelled() }}
