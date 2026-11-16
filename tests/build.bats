@@ -171,6 +171,20 @@ XML
   grep -q 'com.example.PathTest` > reads a file' "$GITHUB_STEP_SUMMARY"
 }
 
+@test "the message of a failed Gradle build starts at what went wrong" {
+  mkdir -p app/build/test-results/test
+  cat >app/build/test-results/test/TEST-a.xml <<'XML'
+<testsuite name="a" tests="1" failures="1">
+  <testcase name="builds" classname="a.BuildTest">
+    <failure message="Unexpected build execution failure with arguments [jar]&#10;Output:&#10;&gt; Task :jar FAILED&#10;* What went wrong:&#10;CMake configure failed with exit code 1." type="x">trace</failure>
+  </testcase>
+</testsuite>
+XML
+  KW_CONFIG="$(default_config | jq --compact-output '.')" run "$repository_root/actions/reports/failed-tests.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'::error title=Failed test%3A BuildTest > builds::* What went wrong:%0ACMake configure failed with exit code 1.'* ]]
+}
+
 @test "only as many failed tests are named as the limit allows" {
   failed_report
   KW_CONFIG="$(default_config | jq --compact-output '.check.summary["failed-tests"] = 1')" \
