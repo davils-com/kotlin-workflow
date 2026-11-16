@@ -33,7 +33,9 @@ One job per runner of the matrix:
 2. sets up the JDK, Gradle and the tools of `tools`, and refuses a runner that holds local
    Kreate publications,
 3. runs `check.tasks` in one Gradle invocation, with `check.primary-tasks` added on the primary
-   leg, then each list of `check.invocations` as an invocation of its own,
+   leg, then each list of `check.invocations` as an invocation of its own. On Windows Gradle is
+   started from PowerShell, so the build sees the environment of Windows itself: Git Bash renames
+   variables such as `SystemRoot`, and MSBuild starts no compiler when a build hands on both names,
 4. on the primary leg, merges the SARIF files of Detekt and of the assurance gate into one run
    per tool and sends them to code scanning. Code scanning refuses a finding without a location,
    so a finding that names no file, such as one about a dependency, is filed under

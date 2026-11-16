@@ -38,3 +38,22 @@ kreate {
         }
     }
 }
+
+val nativeEnvironment = tasks.register("nativeEnvironment") {
+    description = "Fails when Gradle runs on Windows in an environment whose variables were renamed."
+    group = "verification"
+    val isWindows = System.getProperty("os.name").startsWith("Windows")
+    val names = System.getenv().keys.toSet()
+    doLast {
+        if (isWindows && "SystemRoot" !in names) {
+            throw GradleException(
+                "Gradle does not run in the environment of Windows: SystemRoot is missing or renamed. " +
+                    "kotlin-workflow has to start Gradle from PowerShell, not from Git Bash."
+            )
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(nativeEnvironment)
+}

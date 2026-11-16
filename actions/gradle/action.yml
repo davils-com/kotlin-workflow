@@ -19,6 +19,7 @@ runs:
   using: composite
   steps:
     - name: Run Gradle
+      if: runner.os != 'Windows'
       shell: bash
       env:
         KW_ACTION_PATH: ${{ github.action_path }}
@@ -27,3 +28,17 @@ runs:
         KW_CONFIGURATION_CACHE: ${{ inputs.configuration-cache }}
         KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: '"$KW_ACTION_PATH/run.sh"'
+
+    # Git Bash renames variables of Windows, SystemRoot to SYSTEMROOT among them. A build that
+    # hands its environment on then holds both names, and MSBuild starts no compiler. Gradle
+    # therefore runs in the environment of Windows itself.
+    - name: Run Gradle on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_INVOCATIONS: ${{ inputs.invocations }}
+        KW_ARGS: ${{ inputs.args }}
+        KW_CONFIGURATION_CACHE: ${{ inputs.configuration-cache }}
+        KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: '& "$env:KW_ACTION_PATH/run.ps1"'
