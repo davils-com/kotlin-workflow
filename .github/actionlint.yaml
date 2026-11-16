@@ -1,0 +1,6 @@
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      # The workflow identity of a job is newer than this actionlint. GitHub documents it under
+      # the job context: workflow_ref, workflow_sha, workflow_repository, workflow_file_path.
+      - 'property "workflow_repository" is not defined'

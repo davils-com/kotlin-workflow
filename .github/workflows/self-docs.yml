@@ -1,0 +1,41 @@
+name: Documentation
+
+# Builds the Writerside documentation of this repository with its own docs workflow and, on main,
+# deploys it to GitHub Pages. A pull request that touches the documentation builds and checks it
+# without deploying. Not for consumers.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/self-docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: self-docs-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  docs:
+    name: Documentation
+    uses: $/.github/workflows/docs.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      pull-requests: read
+    with:
+      config: |
+        docs:
+          engine: writerside
+          writerside:
+            instance: docs/kw
+            docker-version: "2026.04.8711"
+          pages:
+            enabled: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
