@@ -26,9 +26,14 @@ A sensible widening for a library that ships native code:
 
 ```yaml
 policy:
-  push-develop: { os: [ubuntu-latest, macos-latest, windows-latest] }
-  push-main: { os: [ubuntu-latest, macos-latest, windows-latest] }
-  tag: { os: [ubuntu-latest, macos-latest, windows-latest] }
+  push-develop: { os: [ubuntu-latest, windows-latest] }
+  push-main: { os: [ubuntu-latest, windows-latest] }
+  tag: { os: [ubuntu-latest, windows-latest] }
 ```
 
 Pull requests then stay on Linux, and a platform problem shows on `develop` before a release.
+
+`macos-latest` is a runner like any other and can be added to a list. Think twice before a stage
+that publishes depends on it: an account may run only a few macOS jobs at a time, a job that waits
+for a runner has no time limit, since `timeout` counts from its start, and while it waits the
+snapshot or the release behind it waits too, as does every later run of the branch.

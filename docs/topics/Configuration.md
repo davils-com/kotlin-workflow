@@ -38,7 +38,7 @@ The plan turns the GitHub event into one of eight names, and each has a policy:
 policy:
   push-develop:
     stages: [check, snapshot, security]
-    os: [ubuntu-latest, macos-latest, windows-latest]
+    os: [ubuntu-latest, windows-latest]
     overrides:
       check:
         reproducible: { enabled: true }
