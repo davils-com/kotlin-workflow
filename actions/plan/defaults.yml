@@ -162,6 +162,9 @@ check:
     tests: true
     coverage: true
     assurance: true
+    # How many failed tests a job names as error annotations and in its summary, on every
+    # runner. GitHub shows ten annotations of a step. 0 switches it off.
+    failed-tests: 10
   reproducible:
     enabled: false
     # Run before each of the two builds, as an invocation of its own: Gradle does not order a
