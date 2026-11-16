@@ -1,0 +1,33 @@
+name: Download release
+description: Downloads a published release without credentials and checks that every file a build needs is there.
+
+inputs:
+  publications:
+    description: The publications as JSON, a list of path, artifact and task.
+    required: true
+  repository-url:
+    description: The repository the release went to.
+    required: true
+  version:
+    description: The released version.
+    required: true
+  signed:
+    description: true expects a signature next to every file.
+    default: 'true'
+  directory:
+    description: Where the files are kept.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download every published file
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_PUBLICATIONS: ${{ inputs.publications }}
+        KW_REPOSITORY_URL: ${{ inputs.repository-url }}
+        KW_VERSION: ${{ inputs.version }}
+        KW_SIGNED: ${{ inputs.signed }}
+        KW_DIRECTORY: ${{ inputs.directory }}
+      run: '"$KW_ACTION_PATH/download.sh"'

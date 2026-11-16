@@ -1,0 +1,48 @@
+name: Publications
+description: Lists the publications of a build and decides which of them a release still has to upload.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  version:
+    description: The version to release.
+    required: true
+
+outputs:
+  publications:
+    description: Every publication as JSON, a list of path, artifact and task.
+    value: ${{ steps.discover.outputs.publications }}
+  tasks:
+    description: The upload tasks of the publications that are not in the repository yet, as a JSON list.
+    value: ${{ steps.preflight.outputs.tasks || steps.all.outputs.tasks }}
+
+runs:
+  using: composite
+  steps:
+    - name: List the publications
+      id: discover
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+      run: '"$KW_ACTION_PATH/discover.sh"'
+
+    - name: Look the release up in the repository
+      id: preflight
+      if: fromJSON(inputs.config).release.preflight
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_PUBLICATIONS: ${{ steps.discover.outputs.publications }}
+        KW_REPOSITORY_URL: ${{ fromJSON(inputs.config).publish.repository.releases-url }}
+        KW_VERSION: ${{ inputs.version }}
+      run: '"$KW_ACTION_PATH/preflight.sh"'
+
+    - name: Take every publication
+      id: all
+      if: ${{ !fromJSON(inputs.config).release.preflight }}
+      shell: bash
+      env:
+        KW_PUBLICATIONS: ${{ steps.discover.outputs.publications }}
+      run: echo "tasks=$(jq --compact-output '[.[].task]' <<<"$KW_PUBLICATIONS")" >>"$GITHUB_OUTPUT"
