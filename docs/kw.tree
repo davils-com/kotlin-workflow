@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE instance-profile
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/product-profile.dtd">
+
+<instance-profile id="kw"
+                  name="kotlin-workflow"
+                  start-page="Home.md">
+
+    <toc-element topic="Home.md"/>
+    <toc-element topic="Getting-Started.md"/>
+    <toc-element topic="Configuration.md"/>
+    <toc-element topic="Workflows.md"/>
+    <toc-element topic="Dependency-Updates.md"/>
+    <toc-element topic="Security.md"/>
+    <toc-element topic="Cost.md"/>
+    <toc-element topic="Adoption.md"/>
+    <toc-element topic="Releasing.md"/>
+</instance-profile>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE buildprofiles SYSTEM "https://resources.jetbrains.com/writerside/1.0/build-profiles.dtd">
+<buildprofiles xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/build-profiles.xsd"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <variables>
+        <primary-color>#FF8D09</primary-color>
+    </variables>
+    <footer>
+        <social type="github" href="https://github.com/davils-com"/>
+        <social type="email" href="development@davils.com"/>
+        <social type="blog" href="https://www.davils.com"/>
+        <copyright>2026 Davils</copyright>
+    </footer>
+    <build-profile instance="kw">
+        <variables>
+            <noindex-content>false</noindex-content>
+            <product-web-url>https://github.com/davils-com/kotlin-workflow</product-web-url>
+        </variables>
+    </build-profile>
+</buildprofiles>

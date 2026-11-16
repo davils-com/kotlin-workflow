@@ -1,0 +1,52 @@
+# Security
+
+## Where secrets exist
+
+- `check.yml`, `security.yml`, `docs.yml`, `benchmark.yml` and `dependencies.yml` declare no
+  secret. The code they
+  build, its tests and its dependencies cannot read one.
+- `snapshot.yml` and `release.yml` build first and upload afterwards. The repository token and
+  the signing key are inputs of the single upload step and exist nowhere else in the job.
+- A job that holds a secret restores no Gradle cache and keeps the configuration cache off:
+  a cache was written by another job, and the configuration cache would store the credentials.
+- A release runs in an environment. Give it required reviewers; a snapshot's environment is
+  restricted to the development branch. An environment secret of the same name wins over an
+  organisation secret, which is how the snapshot job gets a token that writes snapshots only.
+
+## Who may write
+
+- `dependencies.yml` is the one workflow that commits to a branch. The job that runs the build
+  of the new versions has no permission to write; the job that commits runs no code of the
+  project and accepts a patch only when it touches nothing but lock files and the verification
+  metadata, as plain files. It acts for pull requests that Dependabot opened from a branch of
+  the repository itself, never for a fork.
+
+## What a release proves
+
+- The tag is on the release branch and equals the version the project declares.
+- Every artifact is signed, and carries a build provenance attestation and an SBOM attestation.
+- The smoke job downloads the files without credentials and verifies them:
+
+```bash
+gh attestation verify library-1.4.0.jar --repo OWNER/PROJECT --signer-repo davils-com/kotlin-workflow
+```
+
+The attestation is signed by the workflow that ran the build. That is this repository, so
+`--signer-repo` names it.
+
+## How the workflows are written
+
+- `permissions: {}` at the top of every workflow, and per job only what it needs.
+- Every action is pinned to a full commit SHA with its version in a comment.
+  `scripts/check-pins.sh` enforces it, and that one action has one commit everywhere.
+- Values that come from an event or from a configuration reach a script through `env`, never as
+  an expression inside `run`.
+- References inside this repository use `$/`, which GitHub resolves to the commit that is
+  running. A project that pins one commit of `pipeline.yml` runs every workflow, action and
+  script at that commit.
+- Checkouts do not persist their credentials.
+- `harden-runner: audit` or `block` puts step-security/harden-runner in front of the Linux jobs.
+
+## Reporting a problem
+
+See [SECURITY.md](https://github.com/davils-com/kotlin-workflow/blob/main/SECURITY.md).
