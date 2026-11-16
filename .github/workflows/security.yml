@@ -1,0 +1,248 @@
+name: Security
+
+# Looks for known vulnerabilities and unwanted content: the assurance gate and the Trivy scans of
+# Kreate, a Trivy scan of the repository, an SBOM, a review of the dependencies a pull request
+# changes and the dependency graph GitHub builds its alerts on. Every part can be switched off.
+#
+# This workflow declares no secret.
+#
+# The caller grants: contents: write (for the dependency graph; read is enough without it),
+# security-events: write, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  gradle:
+    name: Assurance and Trivy
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && fromJSON(inputs.plan || needs.plan.outputs.config).security.gradle.enabled }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.security }}
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Harden the runner
+        if: runner.os == 'Linux' && fromJSON(env.KW_CONFIG).harden-runner != 'off'
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+
+      - name: Scan
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[{0},{1}]', toJSON(fromJSON(env.KW_CONFIG).security.gradle.pre-tasks), toJSON(fromJSON(env.KW_CONFIG).security.gradle.tasks)) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Send the findings to code scanning
+        if: ${{ !cancelled() }}
+        uses: $/actions/sarif
+        with:
+          glob: ${{ fromJSON(env.KW_CONFIG).security.gradle.sarif }}
+          category: kreate-assurance
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        uses: $/actions/reports
+        with:
+          config: ${{ env.KW_CONFIG }}
+          status: ${{ job.status }}
+          name: security-reports
+
+  repository-scan:
+    name: Repository scan
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && fromJSON(inputs.plan || needs.plan.outputs.config).security.repository-scan.enabled }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.security }}
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The SARIF run never fails the job: it reports everything to code scanning. The runs after
+      # it are the gate.
+      - name: Scan for vulnerabilities and misconfigurations
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          scanners: ${{ join(fromJSON(env.KW_CONFIG).security.repository-scan.scanners, ',') }}
+          severity: ${{ join(fromJSON(env.KW_CONFIG).security.repository-scan.severity, ',') }}
+          format: sarif
+          output: trivy.sarif
+          exit-code: '0'
+
+      - name: Send the findings to code scanning
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+      - name: Fail on the configured severities
+        if: ${{ join(fromJSON(env.KW_CONFIG).security.repository-scan.fail-on, ',') != '' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          scanners: ${{ join(fromJSON(env.KW_CONFIG).security.repository-scan.scanners, ',') }}
+          severity: ${{ join(fromJSON(env.KW_CONFIG).security.repository-scan.fail-on, ',') }}
+          format: table
+          exit-code: '1'
+          skip-setup-trivy: true
+
+      - name: Fail on secrets
+        if: ${{ fromJSON(env.KW_CONFIG).security.repository-scan.secrets }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          scanners: secret
+          format: table
+          exit-code: '1'
+          skip-setup-trivy: true
+
+  sbom:
+    name: SBOM
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && fromJSON(inputs.plan || needs.plan.outputs.config).security.sbom.enabled }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.security }}
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write a CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Keep the SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: ${{ fromJSON(env.KW_CONFIG).retention.sbom }}
+
+  dependency-review:
+    name: Dependency review
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && github.event_name == 'pull_request' && fromJSON(inputs.plan || needs.plan.outputs.config).security.dependency-review.enabled }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review the dependencies the pull request changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: ${{ fromJSON(env.KW_CONFIG).security.dependency-review.fail-on-severity }}
+
+  dependency-submission:
+    name: Dependency graph
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && github.event_name == 'push' && github.ref_type == 'branch' && fromJSON(inputs.plan || needs.plan.outputs.config).security.dependency-submission.enabled }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.security }}
+    permissions:
+      contents: write
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the JDK
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: ${{ fromJSON(env.KW_CONFIG).jdk.distribution }}
+          java-version: ${{ fromJSON(env.KW_CONFIG).jdk.version }}
+
+      - name: Submit the dependency graph
+        uses: gradle/actions/dependency-submission@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          build-root-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          cache-read-only: true
