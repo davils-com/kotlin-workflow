@@ -1,0 +1,27 @@
+name: Regenerate dependency records
+description: Regenerates lock files and verification metadata and writes what changed as a patch.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  patch:
+    description: Where to write the patch.
+    required: true
+
+outputs:
+  changed:
+    description: true when the patch is not empty.
+    value: ${{ steps.regenerate.outputs.changed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Regenerate
+      id: regenerate
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_PATCH: ${{ inputs.patch }}
+      run: '"$KW_ACTION_PATH/regenerate.sh"'

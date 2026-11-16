@@ -1,0 +1,158 @@
+name: Dependencies
+
+# Repairs a pull request of Dependabot. Dependabot changes versions only, so a build that locks
+# or verifies its dependencies stays red until the lock files and the checksums are regenerated.
+#
+#   regenerate  runs the build with the new versions and writes what changed as a patch. It has
+#               no permission to write and no secret, because it runs code of the new versions.
+#   apply       checks that the patch touches nothing but the allowed files, commits it to the
+#               pull request and starts the pipeline on the new commit. It runs no project code.
+#
+# The stage runs only for a pull request that Dependabot opened from a branch of the repository
+# itself and that changes the version catalog. For every other pull request it is skipped.
+#
+# The caller grants: contents: write, actions: write, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+    outputs:
+      pushed:
+        description: true when a commit was pushed to the pull request. The run of that commit replaces this one.
+        value: ${{ jobs.apply.outputs.pushed }}
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  regenerate:
+    name: Regenerate locks and checksums
+    needs: plan
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.user.login == 'dependabot[bot]'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && fromJSON(inputs.plan || needs.plan.outputs.config).run.catalog-changed }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.check }}
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.regenerate.outputs.changed }}
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      # The branch itself, not the merge with its base: the patch has to apply to the branch.
+      - name: Checkout the branch of the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+
+      - name: Regenerate
+        id: regenerate
+        uses: $/actions/dependencies-regenerate
+        with:
+          config: ${{ env.KW_CONFIG }}
+          patch: ${{ runner.temp }}/dependency-records.patch
+
+      - name: Hand the patch to the next job
+        if: steps.regenerate.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-records
+          path: ${{ runner.temp }}/dependency-records.patch
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    name: Commit to the pull request
+    needs: [plan, regenerate]
+    if: ${{ !cancelled() && needs.regenerate.result == 'success' && needs.regenerate.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    outputs:
+      pushed: ${{ steps.apply.outputs.pushed }}
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout the branch of the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+
+      - name: Fetch the patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dependency-records
+          path: ${{ runner.temp }}/dependency-records
+
+      - name: Check, commit and push
+        id: apply
+        uses: $/actions/dependencies-apply
+        with:
+          config: ${{ env.KW_CONFIG }}
+          patch: ${{ runner.temp }}/dependency-records/dependency-records.patch
+          expected-sha: ${{ github.event.pull_request.head.sha }}
+          branch: ${{ github.event.pull_request.head.ref }}
+          token: ${{ github.token }}
+
+      # A push made with the token of a workflow starts no run, so the new commit would have no
+      # check at all. A manual start is the one event that token may trigger.
+      - name: Start the pipeline on the new commit
+        if: ${{ steps.apply.outputs.pushed == 'true' && fromJSON(env.KW_CONFIG).dependencies.rerun != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KW_WORKFLOW: ${{ fromJSON(env.KW_CONFIG).dependencies.rerun }}
+          KW_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: gh workflow run "$KW_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref "$KW_BRANCH"
