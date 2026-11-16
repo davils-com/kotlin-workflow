@@ -24,6 +24,7 @@ for tool in actionlint zizmor shellcheck; do
 done
 
 git ls-files --cached --others --exclude-standard -z | while IFS= read -r -d '' file; do
+  if [ ! -f "$file" ]; then continue; fi
   mkdir -p "$copy/$(dirname "$file")"
   cp "$file" "$copy/$file"
 done
@@ -40,6 +41,8 @@ echo "zizmor"
 zizmor --min-severity low --no-progress .github/workflows actions
 
 echo "shellcheck"
-git ls-files --cached --others --exclude-standard '*.sh' | xargs shellcheck
+git ls-files --cached --others --exclude-standard '*.sh' | while IFS= read -r file; do
+  if [ -f "$file" ]; then echo "$file"; fi
+done | xargs shellcheck
 
 echo "All clean."

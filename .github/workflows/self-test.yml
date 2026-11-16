@@ -37,7 +37,6 @@ jobs:
       stages: check,security,docs,benchmark
       config: |
         working-directory: fixtures/library
-        harden-runner: audit
         paths:
           ignore: []
         policy:

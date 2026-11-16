@@ -37,9 +37,6 @@ retention:
   sbom: 90
   benchmark: 30
 
-# off, audit or block: step-security/harden-runner as the first step of Linux jobs.
-harden-runner: "off"
-
 tools:
   cmake: false
   cargo: false

@@ -68,12 +68,6 @@ jobs:
     env:
       KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
     steps:
-      - name: Harden the runner
-        if: runner.os == 'Linux' && fromJSON(env.KW_CONFIG).harden-runner != 'off'
-        uses: $/actions/harden
-        with:
-          policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

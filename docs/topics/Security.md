@@ -45,7 +45,10 @@ The attestation is signed by the workflow that ran the build. That is this repos
   running. A project that pins one commit of `pipeline.yml` runs every workflow, action and
   script at that commit.
 - Checkouts do not persist their credentials.
-- `harden-runner: audit` or `block` puts step-security/harden-runner in front of the Linux jobs.
+- The workflows do not offer step-security/harden-runner. It sets itself up before the first step
+  of a job, whatever the condition of its own step says, so a shared workflow could not switch it
+  off for the projects that do not want it. A project that wants it calls the stages from a job
+  of its own.
 
 ## Reporting a problem
 
