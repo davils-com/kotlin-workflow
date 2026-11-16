@@ -11,6 +11,9 @@ inputs:
   working-directory:
     description: Where to look for the files.
     default: '.'
+  fallback-location:
+    description: The file a finding without a location is filed under. Empty leaves it as it is.
+    default: ''
 
 runs:
   using: composite
@@ -23,6 +26,7 @@ runs:
         KW_GLOB: ${{ inputs.glob }}
         KW_CATEGORY: ${{ inputs.category }}
         KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        KW_FALLBACK_LOCATION: ${{ inputs.fallback-location }}
       run: '"$KW_ACTION_PATH/collect.sh"'
 
     - name: Upload to code scanning

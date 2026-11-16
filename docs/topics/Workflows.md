@@ -35,12 +35,16 @@ One job per runner of the matrix:
 3. runs `check.tasks` in one Gradle invocation, with `check.primary-tasks` added on the primary
    leg, then each list of `check.invocations` as an invocation of its own,
 4. on the primary leg, merges the SARIF files of Detekt and of the assurance gate into one run
-   per tool and sends them to code scanning,
+   per tool and sends them to code scanning. Code scanning refuses a finding without a location,
+   so a finding that names no file, such as one about a dependency, is filed under
+   `code-scanning.fallback-location`, the version catalog by default,
 5. writes test totals, line coverage and the assurance report to the job summary and keeps the
    report files as an artifact, by default only when the job failed.
 
 `check.reproducible` adds a job that builds the same artifacts twice and compares their
-checksums.
+checksums. Each build starts with `check.reproducible.clean-tasks` as a Gradle invocation of
+its own, because Gradle does not order a clean before the tasks of an included build and would
+delete what it just built.
 
 Permissions: `contents: read`, `security-events: write`, `pull-requests: read`. No secrets.
 

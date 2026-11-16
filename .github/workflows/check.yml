@@ -120,6 +120,7 @@ jobs:
           glob: ${{ fromJSON(env.KW_CONFIG).check.sarif.detekt }}
           category: detekt
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          fallback-location: ${{ fromJSON(env.KW_CONFIG).code-scanning.fallback-location }}
 
       - name: Send the assurance findings to code scanning
         if: >-
@@ -132,6 +133,7 @@ jobs:
           glob: ${{ fromJSON(env.KW_CONFIG).check.sarif.assurance }}
           category: kreate-assurance
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          fallback-location: ${{ fromJSON(env.KW_CONFIG).code-scanning.fallback-location }}
 
       - name: Report
         if: ${{ !cancelled() }}

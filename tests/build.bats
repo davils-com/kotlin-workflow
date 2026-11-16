@@ -87,6 +87,34 @@ JSON
   [ "$(jq '.runs[0].tool.driver.rules | length' "$merged")" = "2" ]
 }
 
+@test "a finding without a location is filed under the fallback location" {
+  mkdir -p build/kreate/assurance/reports
+  cat >build/kreate/assurance/reports/report.sarif <<'JSON'
+{"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "Kreate", "rules": []}}, "results": [
+  {"ruleId": "A"},
+  {"ruleId": "B", "locations": []},
+  {"ruleId": "C", "locations": [{"physicalLocation": {"artifactLocation": {"uri": "src/Main.kt"}}}]}
+]}]}
+JSON
+  export RUNNER_TEMP="$workspace"
+  KW_GLOB='**/report.sarif' KW_CATEGORY=assurance KW_FALLBACK_LOCATION=gradle/libs.versions.toml \
+    run "$repository_root/actions/sarif/collect.sh"
+  [ "$status" -eq 0 ]
+  merged="$(output_value file)"
+  uris="$(jq --raw-output '[.runs[0].results[].locations[0].physicalLocation.artifactLocation.uri] | join(" ")' "$merged")"
+  [ "$uris" = "gradle/libs.versions.toml gradle/libs.versions.toml src/Main.kt" ]
+}
+
+@test "a finding without a location stays as it is without a fallback location" {
+  mkdir -p build/kreate/assurance/reports
+  echo '{"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "Kreate"}}, "results": [{"ruleId": "A"}]}]}' \
+    >build/kreate/assurance/reports/report.sarif
+  export RUNNER_TEMP="$workspace"
+  KW_GLOB='**/report.sarif' KW_CATEGORY=assurance run "$repository_root/actions/sarif/collect.sh"
+  [ "$status" -eq 0 ]
+  [ "$(jq '.runs[0].results[0] | has("locations")' "$(output_value file)")" = "false" ]
+}
+
 @test "no SARIF file and an empty glob upload nothing" {
   export RUNNER_TEMP="$workspace"
   KW_GLOB='**/*.sarif' KW_CATEGORY=detekt run "$repository_root/actions/sarif/collect.sh"
@@ -137,6 +165,33 @@ SCRIPT
   KW_CONFIG="$(default_config | jq --compact-output '.')" run "$repository_root/actions/reproducible/compare.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"produced different artifacts"* ]]
+}
+
+cleaning_gradlew() {
+  cat >"$workspace/gradlew" <<'SCRIPT'
+#!/usr/bin/env bash
+root="$(dirname "$0")"
+echo "$1" >>"$root/invocations.log"
+if [ "$1" = "clean" ]; then rm -rf "$root/build"; exit 0; fi
+mkdir -p "$root/build/libs"
+echo fixed >"$root/build/libs/app.jar"
+SCRIPT
+  chmod +x "$workspace/gradlew"
+}
+
+@test "each build starts with a clean of its own invocation" {
+  cleaning_gradlew
+  KW_CONFIG="$(default_config | jq --compact-output '.')" run "$repository_root/actions/reproducible/compare.sh"
+  [ "$status" -eq 0 ]
+  [ "$(tr '\n' ' ' <invocations.log)" = "clean jar clean jar " ]
+}
+
+@test "no clean task leaves the clean out" {
+  cleaning_gradlew
+  KW_CONFIG="$(default_config | jq --compact-output '.check.reproducible["clean-tasks"] = []')" \
+    run "$repository_root/actions/reproducible/compare.sh"
+  [ "$status" -eq 0 ]
+  [ "$(tr '\n' ' ' <invocations.log)" = "jar jar " ]
 }
 
 @test "a reproducibility check without artifacts fails" {

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Collects the SARIF files that match a glob into one file ready for code scanning.
 #
-# Environment: KW_GLOB (a glob; empty switches the collection off), KW_CATEGORY, KW_WORKING_DIRECTORY
+# Environment: KW_GLOB (a glob; empty switches the collection off), KW_CATEGORY, KW_WORKING_DIRECTORY,
+#              KW_FALLBACK_LOCATION (the file a finding without a location is filed under)
 # Outputs (GITHUB_OUTPUT): file (empty when nothing matched)
 
 set -euo pipefail
@@ -30,6 +31,6 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
-jq --slurp --from-file "$here/merge.jq" "${files[@]}" >"$target"
+jq --slurp --arg fallback "${KW_FALLBACK_LOCATION:-}" --from-file "$here/merge.jq" "${files[@]}" >"$target"
 echo "Merged ${#files[@]} SARIF file(s) into $target."
 echo "file=$target" >>"$output"
