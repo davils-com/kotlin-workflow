@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+# Shell scripts run under bash on every runner, including Git Bash on Windows.
+*.sh text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
