@@ -1,0 +1,29 @@
+name: Gradle
+description: Runs Gradle invocations, one after the other, each from a JSON list of tasks.
+
+inputs:
+  invocations:
+    description: A JSON list of invocations, each a list of tasks and their options. An empty invocation is skipped.
+    required: true
+  args:
+    description: A JSON list of arguments added to every invocation.
+    default: '[]'
+  configuration-cache:
+    description: true, false or omit. A job that holds a secret uses false.
+    default: omit
+  working-directory:
+    description: Where the Gradle wrapper is.
+    default: '.'
+
+runs:
+  using: composite
+  steps:
+    - name: Run Gradle
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_INVOCATIONS: ${{ inputs.invocations }}
+        KW_ARGS: ${{ inputs.args }}
+        KW_CONFIGURATION_CACHE: ${{ inputs.configuration-cache }}
+        KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: '"$KW_ACTION_PATH/run.sh"'

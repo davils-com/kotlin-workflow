@@ -1,0 +1,127 @@
+name: Snapshot
+
+# Publishes the snapshot of a commit to the snapshots repository. The build runs first, without
+# any secret in scope; the repository token exists only in the upload step and, for a private
+# repository, in the consumer build after it. A snapshot is never signed.
+#
+# The caller runs the check stage first: this workflow publishes what it is given.
+#
+# The caller grants: contents: read, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+    secrets:
+      MAVEN_USERNAME:
+        description: The name of the repository token.
+        required: true
+      MAVEN_PASSWORD:
+        description: The secret of the repository token.
+        required: true
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  publish:
+    name: Publish the snapshot
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.snapshot }}
+    # The environment restricts who may publish: limit it to the development branch.
+    environment: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).snapshot.environment }}
+    # Snapshots overwrite each other, so two uploads must never interleave. A running upload
+    # finishes; the next one starts after it.
+    concurrency:
+      group: kotlin-workflow-snapshot-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache in the job that holds the repository token: what a cache restores was written by
+      # another job, and it would run here with access to the token.
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: disabled
+
+      - name: Mark the build as a snapshot
+        if: ${{ fromJSON(env.KW_CONFIG).snapshot.kreate-snapshot }}
+        run: echo "KREATE_SNAPSHOT=true" >>"$GITHUB_ENV"
+
+      - name: Build
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).publish.build-tasks)) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          configuration-cache: 'false'
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Upload
+        uses: $/actions/publish
+        with:
+          config: ${{ env.KW_CONFIG }}
+          tasks: ${{ toJSON(fromJSON(env.KW_CONFIG).publish.tasks) }}
+          snapshot: 'true'
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+
+      - name: Build a consumer project against the snapshot
+        if: ${{ fromJSON(env.KW_CONFIG).snapshot.smoke.enabled }}
+        uses: $/actions/consumer-build
+        with:
+          config: ${{ env.KW_CONFIG }}
+          smoke: ${{ toJSON(fromJSON(env.KW_CONFIG).snapshot.smoke) }}
+          snapshot: 'true'
+          repository-url: ${{ fromJSON(env.KW_CONFIG).publish.repository.snapshots-url }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}

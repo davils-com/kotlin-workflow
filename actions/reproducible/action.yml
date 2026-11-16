@@ -1,0 +1,17 @@
+name: Reproducible build
+description: Builds the same artifacts twice and fails when their checksums differ.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build twice and compare
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+      run: '"$KW_ACTION_PATH/compare.sh"'

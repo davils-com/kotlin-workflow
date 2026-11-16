@@ -1,0 +1,44 @@
+name: Apply dependency records
+description: Commits a checked patch of regenerated lock files and checksums to the branch of a pull request.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  patch:
+    description: The patch to apply.
+    required: true
+  expected-sha:
+    description: The commit the patch was made for.
+    required: true
+  branch:
+    description: The branch of the pull request.
+    required: true
+  token:
+    description: A token that may push to the branch.
+    required: true
+
+outputs:
+  pushed:
+    description: true when a commit was pushed.
+    value: ${{ steps.apply.outputs.pushed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check, commit and push
+      id: apply
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_PATCH: ${{ inputs.patch }}
+        KW_EXPECTED_SHA: ${{ inputs.expected-sha }}
+        KW_BRANCH: ${{ inputs.branch }}
+        KW_TOKEN: ${{ inputs.token }}
+        KW_SERVER: ${{ github.server_url }}
+        KW_REPOSITORY: ${{ github.repository }}
+      run: |
+        host="${KW_SERVER#https://}"
+        export KW_PUSH_URL="https://x-access-token:${KW_TOKEN}@${host}/${KW_REPOSITORY}.git"
+        "$KW_ACTION_PATH/apply.sh"

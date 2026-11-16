@@ -1,0 +1,55 @@
+# .github/kotlin-workflow.yml: what the pipeline of this project does.
+#
+# Every key is optional. The full list with every default is actions/plan/defaults.yml of
+# davils-com/kotlin-workflow; a key that is not in it stops the run. The examples below are the
+# settings projects change most often.
+version: 1
+
+# jdk:
+#   version: "25"
+
+# Tools the build needs on the runner.
+# tools:
+#   cmake: true
+
+# What the check stage runs. Kreate puts Detekt, the tests, coverage verification, the API check
+# and the secret scan on `check` already.
+# check:
+#   primary-tasks: [koverXmlReport]
+#   invocations: [[integrationTest]]
+
+# Which stages an event starts and on which runners. `overrides` changes any other key for
+# that event alone.
+# policy:
+#   push-develop:
+#     os: [ubuntu-latest, macos-latest, windows-latest]
+#   pull-request:
+#     overrides:
+#       check:
+#         reports: { upload: always }
+
+# The Maven repository. These are the defaults: a project that publishes to repo.davils.com with
+# `maven { name = "Davils" }` in its Kreate block needs none of it.
+# publish:
+#   repository:
+#     name: Davils
+#   tasks: [publishAllPublicationsToDavilsRepository]
+
+# release:
+#   github-release:
+#     notes: task
+
+# docs:
+#   engine: dokka
+
+# How a pull request of Dependabot repairs itself after the version catalog changed.
+# dependencies:
+#   lock:
+#     invocations: [[kreateResolveAndLockAll, --write-locks]]
+#   verification:
+#     tasks: [check]
+
+# A cron of the workflow file mapped to the stages it starts.
+# schedule:
+#   crons:
+#     "0 4 * * 0": [benchmark]

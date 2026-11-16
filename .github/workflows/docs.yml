@@ -1,0 +1,166 @@
+name: Docs
+
+# Builds the documentation of a project, with Dokka through Gradle or with Writerside, and deploys
+# it to GitHub Pages.
+#
+# This workflow declares no secret.
+#
+# The caller grants: contents: read, pages: write, id-token: write, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  build:
+    name: Build the documentation
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && fromJSON(inputs.plan || needs.plan.outputs.config).docs.engine != 'none' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.docs }}
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+      KW_ENGINE: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).docs.engine }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Refuse an unknown engine
+        if: env.KW_ENGINE != 'dokka' && env.KW_ENGINE != 'writerside'
+        run: |
+          echo "::error::docs.engine is '$KW_ENGINE', expected none, dokka or writerside."
+          exit 1
+
+      - name: Set up
+        if: env.KW_ENGINE == 'dokka'
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+          tools: 'false'
+
+      - name: Generate the API documentation
+        if: env.KW_ENGINE == 'dokka'
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).docs.dokka.tasks)) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Name the Writerside artifacts
+        id: writerside
+        if: env.KW_ENGINE == 'writerside'
+        env:
+          KW_INSTANCE: ${{ fromJSON(env.KW_CONFIG).docs.writerside.instance }}
+        run: |
+          if [ -z "$KW_INSTANCE" ]; then
+            echo "::error::docs.writerside.instance is empty. Set it to the module and instance, such as docs/d."
+            exit 1
+          fi
+          id="$(tr '[:lower:]' '[:upper:]' <<<"${KW_INSTANCE#*/}")"
+          echo "archive=webHelp${id}2-all.zip" >>"$GITHUB_OUTPUT"
+
+      - name: Build with Writerside
+        if: env.KW_ENGINE == 'writerside'
+        uses: JetBrains/writerside-github-action@738910d7cf197d67188300d0e0f84b2e708db3cf # v4
+        with:
+          instance: ${{ fromJSON(env.KW_CONFIG).docs.writerside.instance }}
+          docker-version: ${{ fromJSON(env.KW_CONFIG).docs.writerside.docker-version }}
+
+      - name: Check the Writerside build
+        if: ${{ env.KW_ENGINE == 'writerside' && fromJSON(env.KW_CONFIG).docs.writerside.check }}
+        uses: JetBrains/writerside-checker-action@79ff89902dcd3d5c5a3f26a79bc35830377f38c5 # v1
+        with:
+          instance: ${{ fromJSON(env.KW_CONFIG).docs.writerside.instance }}
+
+      - name: Unpack the Writerside build
+        if: env.KW_ENGINE == 'writerside'
+        env:
+          KW_ARCHIVE: ${{ steps.writerside.outputs.archive }}
+        run: unzip -O UTF-8 -qq "artifacts/$KW_ARCHIVE" -d "$RUNNER_TEMP/site"
+
+      - name: Take the Dokka output
+        if: env.KW_ENGINE == 'dokka'
+        run: |
+          directory="$(jq --raw-output '.["working-directory"] + "/" + .docs.dokka.output' <<<"$KW_CONFIG")"
+          if [ ! -d "$directory" ]; then
+            echo "::error::$directory does not exist. Set docs.dokka.output to where Dokka writes."
+            exit 1
+          fi
+          cp -R "$directory" "$RUNNER_TEMP/site"
+
+      - name: Package the site for Pages
+        if: ${{ fromJSON(env.KW_CONFIG).docs.pages.enabled }}
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: [plan, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && fromJSON(inputs.plan || needs.plan.outputs.config).docs.pages.enabled }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).docs.pages.environment }}
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: kotlin-workflow-pages-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Set up Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

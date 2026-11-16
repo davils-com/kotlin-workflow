@@ -1,0 +1,170 @@
+name: Check
+
+# Builds and verifies a project on every runner of the matrix, in one Gradle invocation per
+# runner. The first runner is the primary leg: it alone runs the primary tasks, sends SARIF to
+# code scanning and writes the summary.
+#
+# This workflow declares no secret, so none can reach the code it builds.
+#
+# The caller grants: contents: read, security-events: write, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      matrix:
+        description: The runners as a JSON list, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  check:
+    name: Check (${{ matrix.name }})
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.check }}
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.matrix || needs.plan.outputs.matrix) }}
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ fromJSON(env.KW_CONFIG).check.fetch-depth }}
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: ${{ fromJSON(env.KW_CONFIG).run.cache-mode }}
+
+      # The primary tasks ride the first invocation of the primary leg, so that a coverage report
+      # costs no second test run. Further invocations follow on every leg.
+      - name: Choose the invocations
+        id: invocations
+        env:
+          KW_PRIMARY: ${{ matrix.primary }}
+        run: |
+          invocations="$(jq --compact-output --argjson primary "$KW_PRIMARY" \
+            '[.check.tasks + (if $primary then .check["primary-tasks"] else [] end)] + .check.invocations' <<<"$KW_CONFIG" | tr -d '\r')"
+          echo "invocations=$invocations" >>"$GITHUB_OUTPUT"
+
+      - name: Check
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ steps.invocations.outputs.invocations }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          configuration-cache: ${{ fromJSON(env.KW_CONFIG).gradle.configuration-cache }}
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      # A pull request from a fork or from Dependabot has a token that cannot write to code
+      # scanning, so the upload is left to the run on the branch.
+      - name: Send the Detekt findings to code scanning
+        if: >-
+          !cancelled() && matrix.primary
+          && (github.event_name != 'pull_request'
+              || (github.event.pull_request.head.repo.full_name == github.repository
+                  && github.event.pull_request.user.login != 'dependabot[bot]'))
+        uses: $/actions/sarif
+        with:
+          glob: ${{ fromJSON(env.KW_CONFIG).check.sarif.detekt }}
+          category: detekt
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Send the assurance findings to code scanning
+        if: >-
+          !cancelled() && matrix.primary
+          && (github.event_name != 'pull_request'
+              || (github.event.pull_request.head.repo.full_name == github.repository
+                  && github.event.pull_request.user.login != 'dependabot[bot]'))
+        uses: $/actions/sarif
+        with:
+          glob: ${{ fromJSON(env.KW_CONFIG).check.sarif.assurance }}
+          category: kreate-assurance
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        uses: $/actions/reports
+        with:
+          config: ${{ env.KW_CONFIG }}
+          status: ${{ job.status }}
+          name: check-reports-${{ matrix.name }}
+          summary: ${{ matrix.primary }}
+
+  reproducible:
+    name: Reproducible build
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && fromJSON(inputs.plan || needs.plan.outputs.config).check.reproducible.enabled }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.check }}
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+
+      - name: Build twice and compare
+        uses: $/actions/reproducible
+        with:
+          config: ${{ env.KW_CONFIG }}

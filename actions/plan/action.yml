@@ -1,0 +1,70 @@
+name: Plan
+description: Resolves the configuration of a run and decides which stages it starts.
+
+inputs:
+  config-file:
+    description: The project's configuration file. A missing file is no error.
+    default: .github/kotlin-workflow.yml
+  config:
+    description: Inline YAML merged over the project's configuration file.
+    default: ''
+  stages:
+    description: Comma separated stages that replace the policy of the event.
+    default: ''
+  dry-run:
+    description: Runs the release stage without uploading anything.
+    default: 'false'
+  token:
+    description: A token that may read the repository and its pull requests.
+    required: true
+
+outputs:
+  config:
+    description: The resolved configuration as JSON.
+    value: ${{ steps.plan.outputs.config }}
+  stages:
+    description: A JSON object of stage names and whether each runs.
+    value: ${{ steps.plan.outputs.stages }}
+  matrix:
+    description: The runners of the check stage as a JSON list.
+    value: ${{ steps.plan.outputs.matrix }}
+  event:
+    description: The event the policy was chosen for.
+    value: ${{ steps.plan.outputs.event }}
+  version:
+    description: The version a tag releases, empty for every other event.
+    value: ${{ steps.plan.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: List the changed files
+      id: changed
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_EVENT_NAME: ${{ github.event_name }}
+        KW_PR_NUMBER: ${{ github.event.pull_request.number }}
+        KW_BEFORE: ${{ github.event.before }}
+        KW_AFTER: ${{ github.sha }}
+        KW_MERGE_BASE: ${{ github.event.merge_group.base_sha }}
+        KW_MERGE_HEAD: ${{ github.event.merge_group.head_sha }}
+      run: '"$KW_ACTION_PATH/changed-files.sh"'
+
+    - name: Resolve the configuration
+      id: plan
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG_FILE: ${{ inputs.config-file }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_STAGES: ${{ inputs.stages }}
+        KW_DRY_RUN: ${{ inputs.dry-run }}
+        KW_CHANGED_FILES: ${{ steps.changed.outputs.file }}
+        KW_EVENT_NAME: ${{ github.event_name }}
+        KW_REF: ${{ github.ref }}
+        KW_REF_NAME: ${{ github.ref_name }}
+        KW_CRON: ${{ github.event.schedule }}
+        KW_PR_DRAFT: ${{ github.event.pull_request.draft }}
+      run: '"$KW_ACTION_PATH/plan.sh"'

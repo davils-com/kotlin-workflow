@@ -1,0 +1,51 @@
+# .github/dependabot.yml of a Kotlin project that builds with Kreate.
+#
+# Minor and patch updates arrive as one pull request per ecosystem, majors one by one, and a new
+# version waits a few days before it is proposed. That keeps the number of runs down and gives a
+# bad release time to be withdrawn.
+#
+# Dependabot changes versions only. For a project that locks its dependencies or verifies them
+# with gradle/verification-metadata.xml, the dependencies stage of the pipeline regenerates both
+# and commits them to the pull request, see docs/topics/Dependency-Updates.md of kotlin-workflow.
+version: 2
+
+updates:
+  - package-ecosystem: "gradle"
+    # The versions of the build live in gradle/libs.versions.toml. One entry for the root is
+    # enough then, also when included builds read the same catalog: an entry per included build
+    # would open every update once more for each of them.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "build(deps)"
+    # The Kotlin version is a decision, not an update: it sets the language level and the plugin
+    # API of the whole build. Uncomment to keep it out of Dependabot's hands.
+    # ignore:
+    #   - dependency-name: "org.jetbrains.kotlin:*"
+    #   - dependency-name: "org.jetbrains.kotlin.jvm:*"
+    #   - dependency-name: "org.jetbrains.kotlin.multiplatform:*"
+    #   - dependency-name: "org.jetbrains.kotlin.plugin.*:*"
+
+  # Keeps the actions of the workflows and the pin of kotlin-workflow itself current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(deps)"

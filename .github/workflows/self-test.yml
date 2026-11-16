@@ -1,0 +1,136 @@
+name: Self-test
+
+# Runs the pipeline of this repository against the project in fixtures/library, so that a change
+# to a workflow is tried on a real Kreate build before anyone pins it. Not for consumers.
+#
+# The fixture builds with a released Kreate. The snapshot and the release stage need a repository
+# token and are proven by the projects that use them.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: self-test-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  pipeline:
+    name: Pipeline on the fixture
+    uses: $/.github/workflows/pipeline.yml
+    permissions:
+      contents: write
+      actions: write
+      security-events: write
+      id-token: write
+      attestations: write
+      pages: write
+      pull-requests: read
+    with:
+      # The whole pipeline, whatever the event: this run tests the workflows, not a change of the
+      # fixture.
+      stages: check,security,docs,benchmark
+      config: |
+        working-directory: fixtures/library
+        paths:
+          ignore: []
+        policy:
+          push-develop: { overrides: { security: { repository-scan: { enabled: true }, sbom: { enabled: true } } } }
+          push-main: { overrides: { security: { repository-scan: { enabled: true }, sbom: { enabled: true } } } }
+          pull-request: { overrides: { security: { repository-scan: { enabled: true }, sbom: { enabled: true } } } }
+        check:
+          tasks: [check]
+          reports:
+            upload: always
+          reproducible:
+            enabled: true
+            tasks: [clean, jar]
+        security:
+          gradle:
+            enabled: false
+          dependency-submission:
+            enabled: false
+        docs:
+          engine: none
+        benchmark:
+          tasks: [help]
+          summary: ""
+          paths: ["fixtures/library/build/reports/**"]
+
+  # A configuration with a mistake has to stop the plan, and nothing after it may start.
+  broken-configuration:
+    name: A broken configuration stops the plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan with an unknown option
+        id: plan
+        continue-on-error: true
+        uses: $/actions/plan
+        with:
+          config: |
+            check:
+              taskz: [check]
+          token: ${{ github.token }}
+
+      - name: Expect the plan to have failed
+        env:
+          KW_OUTCOME: ${{ steps.plan.outcome }}
+        run: |
+          if [ "$KW_OUTCOME" != "failure" ]; then
+            echo "::error::The plan accepted an unknown option."
+            exit 1
+          fi
+
+  # Three runners from one line of configuration, and a release that is only rehearsed.
+  matrix-and-dry-run:
+    name: Matrix and dry run
+    uses: $/.github/workflows/pipeline.yml
+    permissions:
+      contents: write
+      actions: write
+      security-events: write
+      id-token: write
+      attestations: write
+      pages: write
+      pull-requests: read
+    with:
+      stages: check,release
+      dry-run: true
+      config: |
+        working-directory: fixtures/library
+        policy:
+          push-develop: { os: [ubuntu-latest, macos-latest, windows-latest] }
+          push-main: { os: [ubuntu-latest, macos-latest, windows-latest] }
+          pull-request: { os: [ubuntu-latest, macos-latest, windows-latest] }
+          workflow-dispatch: { os: [ubuntu-latest, macos-latest, windows-latest] }
+        check:
+          reports:
+            upload: never
+        release:
+          gate:
+            branch: ""
+          publications:
+            discovery: explicit
+            list:
+              - path: com/davils/kotlinworkflow/fixture/kotlin-workflow-fixture
+                artifact: kotlin-workflow-fixture
+                task: ":publishMavenPublicationToDavilsRepository"
+          sign: false
+          github-release:
+            enabled: false
+          smoke:
+            enabled: false

@@ -1,0 +1,27 @@
+name: Release gate
+description: Decides whether a tag may be released and returns its version.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  version:
+    description: The version the tag carries. Empty in a dry run.
+    default: ''
+
+outputs:
+  version:
+    description: The version to release.
+    value: ${{ steps.gate.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the release
+      id: gate
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_VERSION: ${{ inputs.version }}
+      run: '"$KW_ACTION_PATH/gate.sh"'

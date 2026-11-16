@@ -1,0 +1,269 @@
+# The built-in configuration of kotlin-workflow. Every key a project may set is listed here with
+# its default, and this file is the schema as well: a key that is not in it, or a value of another
+# type, stops the plan job. Projects override it in .github/kotlin-workflow.yml, callers with the
+# `config` input, and `policy.<event>.overrides` changes any key for one event.
+version: 1
+
+jdk:
+  version: "25"
+  distribution: temurin
+
+# The runner of every job that has no operating system matrix.
+runs-on: ubuntu-latest
+
+gradle:
+  args: ["--stacktrace"]
+  configuration-cache: true
+  validate-wrappers: true
+  # Only pushes to these branches write the Gradle cache. Everything else reads it.
+  cache-write-branches: [main, develop]
+
+working-directory: "."
+
+# Environment variables of every Gradle invocation.
+env: {}
+
+timeout:
+  plan: 5
+  check: 45
+  security: 30
+  snapshot: 30
+  release: 45
+  docs: 20
+  benchmark: 45
+
+retention:
+  reports: 7
+  sbom: 90
+  benchmark: 30
+
+tools:
+  cmake: false
+  cargo: false
+  # A Trivy version such as v0.76.2 installs it. Kreate provisions its own Trivy, so most
+  # projects leave this empty.
+  trivy: ""
+  packages:
+    apt: []
+    brew: []
+    choco: []
+
+branches:
+  main: main
+  develop: develop
+
+paths:
+  # A push or pull request that changes nothing but these files skips every stage except docs.
+  ignore: ["**/*.md", "docs/**", "LICENSE"]
+
+pull-request:
+  # false skips every stage while a pull request is a draft.
+  drafts: true
+
+schedule:
+  # A cron expression of the caller mapped to the stages it starts, such as
+  # "0 4 * * 0": [benchmark]. A cron that is not listed starts policy.schedule.stages.
+  crons: {}
+
+# What runs for which event. `os` lists the runners of the check stage; the first one is the
+# primary leg, which alone uploads reports. `overrides` is merged over the whole configuration.
+policy:
+  pull-request:
+    stages: [dependencies, check, security]
+    os: [ubuntu-latest]
+    overrides:
+      security:
+        gradle: { enabled: false }
+        repository-scan: { enabled: false }
+        sbom: { enabled: false }
+  push-develop:
+    stages: [check, snapshot, security]
+    os: [ubuntu-latest]
+    overrides:
+      security:
+        gradle: { enabled: false }
+        repository-scan: { enabled: false }
+        sbom: { enabled: false }
+  push-main:
+    stages: [check, docs]
+    os: [ubuntu-latest]
+    overrides: {}
+  push-other:
+    stages: [check]
+    os: [ubuntu-latest]
+    overrides: {}
+  tag:
+    stages: [check, release]
+    os: [ubuntu-latest]
+    overrides: {}
+  schedule:
+    stages: [security]
+    os: [ubuntu-latest]
+    overrides: {}
+  merge-group:
+    stages: [check]
+    os: [ubuntu-latest]
+    overrides: {}
+  workflow-dispatch:
+    stages: [check]
+    os: [ubuntu-latest]
+    overrides: {}
+
+# Repairs a Dependabot pull request: Dependabot changes versions only, so a build that locks or
+# verifies its dependencies stays red until the lock files and the checksums are regenerated.
+# The stage runs for a pull request of Dependabot that changes the version catalog, commits what
+# changed to the pull request and starts the pipeline again on the new commit.
+dependencies:
+  # The version catalog every version of the build is declared in.
+  catalog: gradle/libs.versions.toml
+  # Further files whose change starts the stage.
+  triggers: [gradle/wrapper/gradle-wrapper.properties]
+  lock:
+    # Gradle invocations that rewrite the lock files, each a list of tasks and options, such as
+    # [[kreateResolveAndLockAll, --write-locks]].
+    invocations: []
+  verification:
+    # Rewrites the verification metadata when the project has the file.
+    enabled: true
+    file: gradle/verification-metadata.xml
+    checksums: sha256
+    # The tasks that resolve everything the build verifies.
+    tasks: [check]
+  # The only files the stage may change. Anything else the build touched is left out.
+  paths: ["**/gradle.lockfile", "**/settings-gradle.lockfile", "gradle/verification-metadata.xml"]
+  commit-message: "build(deps): record locks and checksums"
+  # The workflow file to start on the branch after the commit, because a push made by a workflow
+  # starts no run of its own. Empty switches it off.
+  rerun: pipeline.yml
+
+check:
+  tasks: [check]
+  # Further tasks of the primary leg, in the same invocation, such as koverXmlReport.
+  primary-tasks: []
+  # Further Gradle invocations after the first, each a list of tasks, such as [[integrationTest]].
+  invocations: []
+  fetch-depth: 0
+  # Fails the job when the runner carries local development state of Kreate.
+  local-state-guard: true
+  reports:
+    # on-failure, always or never
+    upload: on-failure
+    paths: ["**/build/reports/**", "**/build/test-results/**"]
+  sarif:
+    # A glob of SARIF files to send to code scanning. Empty switches the upload off.
+    detekt: "**/build/reports/detekt/**/*.sarif"
+    assurance: "**/build/kreate/assurance/reports/report.sarif"
+  summary:
+    tests: true
+    coverage: true
+    assurance: true
+  reproducible:
+    enabled: false
+    tasks: [jar]
+    artifacts: ["**/build/libs/*.jar"]
+
+security:
+  gradle:
+    enabled: true
+    pre-tasks: []
+    tasks: [kreateAssurance, kreateTrivyScan]
+    sarif: "**/build/kreate/assurance/reports/report.sarif"
+  repository-scan:
+    enabled: true
+    scanners: [vuln, misconfig]
+    severity: [CRITICAL, HIGH, MEDIUM]
+    # A finding of one of these severities fails the job.
+    fail-on: [CRITICAL]
+    secrets: true
+  sbom:
+    enabled: true
+  dependency-review:
+    enabled: true
+    fail-on-severity: high
+  dependency-submission:
+    enabled: true
+
+publish:
+  repository:
+    name: Davils
+    releases-url: https://repo.davils.com/releases
+    snapshots-url: https://repo.davils.com/snapshots
+  # The environment variables the build reads the repository token from.
+  username-env: DAVILS_MAVEN_NAME
+  password-env: DAVILS_MAVEN_SECRET
+  # Run without any secret in scope, before the upload.
+  build-tasks: [assemble]
+  # Run in this order, one Gradle invocation each, with the secrets in scope.
+  tasks: [publishAllPublicationsToDavilsRepository]
+
+snapshot:
+  environment: snapshot
+  # Sets KREATE_SNAPSHOT=true, which makes Kreate append -SNAPSHOT to the version.
+  kreate-snapshot: true
+  smoke:
+    enabled: false
+    project-dir: ""
+    tasks: []
+    # {version} and {repository} are replaced by the published version and the repository URL.
+    args: []
+
+release:
+  environment: release
+  tag:
+    prefix: ""
+    # Accepts v1.2.3 next to 1.2.3.
+    allow-v: true
+  # The environment variable the build reads the released version from.
+  version-env: CI_COMMIT_TAG
+  gate:
+    # The tag has to be an ancestor of this branch. Empty switches the rule off.
+    branch: main
+    # The tag has to equal `version-key` in this properties file. Empty switches the rule off.
+    version-file: gradle.properties
+    version-key: version
+    reject-snapshot: true
+  # Looks every publication up in the repository first and uploads what is missing.
+  preflight: true
+  publications:
+    # auto asks Gradle for the publications; explicit uses `list`.
+    discovery: auto
+    # Entries of {path, artifact, task}, such as
+    # {path: com/example/library, artifact: library, task: ":publishMavenPublicationToDavilsRepository"}.
+    list: []
+  sign: true
+  attest:
+    provenance: true
+    sbom: true
+    subjects: ["**/build/libs/*.jar"]
+  github-release:
+    enabled: true
+    # generate lets GitHub write the notes; task runs `notes-task` and reads `notes-file`.
+    notes: generate
+    notes-task: kreateChangelogNotes
+    notes-file: build/kreate/changelog/notes.md
+  smoke:
+    enabled: true
+    project-dir: ""
+    tasks: []
+    args: []
+  # Runs everything except the upload, the attestations and the GitHub release.
+  dry-run: false
+
+docs:
+  # none, dokka or writerside
+  engine: none
+  dokka:
+    tasks: [dokkaGenerate]
+    output: build/dokka/html
+  writerside:
+    instance: ""
+    docker-version: ""
+    check: true
+  pages:
+    enabled: true
+    environment: github-pages
+
+benchmark:
+  tasks: [kreateBenchmarkCheck]
+  summary: "**/build/reports/kreate/benchmark/comparison.md"
+  paths: ["**/build/reports/kreate/benchmark/**"]

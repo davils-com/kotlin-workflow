@@ -1,0 +1,39 @@
+name: Reports
+description: Writes the job summary of a check and keeps its report files as an artifact.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  status:
+    description: The status of the job so far, usually job.status.
+    required: true
+  name:
+    description: The name of the artifact.
+    required: true
+  summary:
+    description: Whether to write the job summary. Only one leg of a matrix should.
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Write the summary
+      if: inputs.summary == 'true'
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_WORKING_DIRECTORY: ${{ fromJSON(inputs.config).working-directory }}
+      run: '"$KW_ACTION_PATH/summary.sh"'
+
+    - name: Keep the reports
+      if: >-
+        fromJSON(inputs.config).check.reports.upload == 'always'
+        || (fromJSON(inputs.config).check.reports.upload == 'on-failure' && inputs.status != 'success')
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ join(fromJSON(inputs.config).check.reports.paths, fromJSON('"\n"')) }}
+        retention-days: ${{ fromJSON(inputs.config).retention.reports }}
+        if-no-files-found: ignore

@@ -1,0 +1,25 @@
+name: Summary files
+description: Appends the Markdown files that match a glob to the job summary.
+
+inputs:
+  glob:
+    description: A glob of Markdown files. Empty appends nothing.
+    default: ''
+  title:
+    description: The heading above each file.
+    default: Report
+  working-directory:
+    description: Where to look for the files.
+    default: '.'
+
+runs:
+  using: composite
+  steps:
+    - name: Append to the summary
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_GLOB: ${{ inputs.glob }}
+        KW_TITLE: ${{ inputs.title }}
+        KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: '"$KW_ACTION_PATH/append.sh"'

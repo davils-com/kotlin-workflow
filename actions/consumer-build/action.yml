@@ -1,0 +1,41 @@
+name: Consumer build
+description: Builds a small consumer project against what was just published.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  smoke:
+    description: The smoke section of the stage as JSON, with project-dir, tasks and args.
+    required: true
+  version:
+    description: The published version. Empty derives it from the declared version.
+    default: ''
+  snapshot:
+    description: true for a snapshot.
+    default: 'false'
+  repository-url:
+    description: The repository the publication went to.
+    required: true
+  maven-username:
+    description: The name of the repository token, for a private repository.
+    default: ''
+  maven-password:
+    description: The secret of the repository token, for a private repository.
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Build the consumer project
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_SMOKE: ${{ inputs.smoke }}
+        KW_VERSION: ${{ inputs.version }}
+        KW_SNAPSHOT: ${{ inputs.snapshot }}
+        KW_REPOSITORY_URL: ${{ inputs.repository-url }}
+        KW_MAVEN_USERNAME: ${{ inputs.maven-username }}
+        KW_MAVEN_PASSWORD: ${{ inputs.maven-password }}
+      run: '"$KW_ACTION_PATH/build.sh"'
