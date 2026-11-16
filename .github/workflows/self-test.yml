@@ -95,7 +95,7 @@ jobs:
             exit 1
           fi
 
-  # Three runners from one line of configuration, and a release that is only rehearsed.
+  # Two runners from one line of configuration, and a release that is only rehearsed.
   matrix-and-dry-run:
     name: Matrix and dry run
     uses: $/.github/workflows/pipeline.yml
