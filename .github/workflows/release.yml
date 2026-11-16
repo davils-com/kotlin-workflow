@@ -146,7 +146,7 @@ jobs:
         env:
           KW_VERSION: ${{ needs.gate.outputs.version }}
         run: |
-          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG")"
+          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG" | tr -d '\r')"
           if [ -n "$name" ]; then echo "$name=$KW_VERSION" >>"$GITHUB_ENV"; fi
 
       - name: List the publications
@@ -178,9 +178,9 @@ jobs:
     steps:
       - name: Harden the runner
         if: runner.os == 'Linux' && fromJSON(env.KW_CONFIG).harden-runner != 'off'
-        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        uses: $/actions/harden
         with:
-          egress-policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
+          policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,7 +199,7 @@ jobs:
         env:
           KW_VERSION: ${{ needs.gate.outputs.version }}
         run: |
-          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG")"
+          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG" | tr -d '\r')"
           if [ -n "$name" ]; then echo "$name=$KW_VERSION" >>"$GITHUB_ENV"; fi
 
       # Built before any secret exists in the job, and always in full, so that a run which only
@@ -360,9 +360,9 @@ jobs:
           KW_TAG: ${{ github.ref_name }}
           KW_VERSION: ${{ needs.gate.outputs.version }}
         run: |
-          mode="$(jq --raw-output '.release["github-release"].notes' <<<"$KW_CONFIG")"
-          directory="$(jq --raw-output '.["working-directory"]' <<<"$KW_CONFIG")"
-          notes="$directory/$(jq --raw-output '.release["github-release"]["notes-file"]' <<<"$KW_CONFIG")"
+          mode="$(jq --raw-output '.release["github-release"].notes' <<<"$KW_CONFIG" | tr -d '\r')"
+          directory="$(jq --raw-output '.["working-directory"]' <<<"$KW_CONFIG" | tr -d '\r')"
+          notes="$directory/$(jq --raw-output '.release["github-release"]["notes-file"]' <<<"$KW_CONFIG" | tr -d '\r')"
 
           if gh release view "$KW_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "The release $KW_TAG exists already."

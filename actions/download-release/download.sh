@@ -11,6 +11,10 @@
 
 set -euo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
+
 repository="${KW_REPOSITORY_URL:?KW_REPOSITORY_URL is not set}"
 version="${KW_VERSION:?KW_VERSION is not set}"
 directory="${KW_DIRECTORY:?KW_DIRECTORY is not set}"

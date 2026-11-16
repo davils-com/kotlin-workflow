@@ -7,6 +7,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$here/common.sh"
 globs="${1:-[]}"
 
 find . \( -name .git -o -name .gradle -o -name node_modules \) -prune -o -type f -print \

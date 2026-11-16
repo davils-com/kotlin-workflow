@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
+
 packages_of() {
   jq --raw-output --arg manager "$1" '.tools.packages[$manager][]?' <<<"$KW_CONFIG"
 }

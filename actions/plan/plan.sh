@@ -14,6 +14,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
 
 config_file="${KW_CONFIG_FILE:-.github/kotlin-workflow.yml}"
 file_json='{}'

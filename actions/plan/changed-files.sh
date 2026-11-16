@@ -9,6 +9,10 @@
 
 set -euo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
+
 readonly no_commit="0000000000000000000000000000000000000000"
 readonly compare_limit=300
 

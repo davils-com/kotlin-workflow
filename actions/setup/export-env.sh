@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
+
 names="$(jq --raw-output '.env // {} | keys[]' <<<"$KW_CONFIG")"
 
 while IFS= read -r name; do

@@ -9,6 +9,10 @@
 
 set -euo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
+
 case "${KW_CONFIGURATION_CACHE:-omit}" in
   true) cache_argument="--configuration-cache" ;;
   false) cache_argument="--no-configuration-cache" ;;

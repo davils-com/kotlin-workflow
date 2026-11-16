@@ -83,9 +83,9 @@ jobs:
     steps:
       - name: Harden the runner
         if: runner.os == 'Linux' && fromJSON(env.KW_CONFIG).harden-runner != 'off'
-        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        uses: $/actions/harden
         with:
-          egress-policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
+          policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

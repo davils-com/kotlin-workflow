@@ -1,0 +1,19 @@
+name: Harden
+description: Puts step-security/harden-runner in front of a Linux job.
+
+# harden-runner starts its setup before the steps of a job, whatever the condition of its own
+# step says. Wrapped in this action it starts only when the action itself runs, so a job that
+# switches hardening off, or runs on another operating system, never starts it.
+
+inputs:
+  policy:
+    description: audit or block.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Harden the runner
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+      with:
+        egress-policy: ${{ inputs.policy }}

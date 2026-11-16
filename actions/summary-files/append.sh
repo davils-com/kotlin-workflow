@@ -6,6 +6,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
 summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 if [ -z "${KW_GLOB:-}" ]; then exit 0; fi

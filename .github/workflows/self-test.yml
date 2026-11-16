@@ -37,8 +37,13 @@ jobs:
       stages: check,security,docs,benchmark
       config: |
         working-directory: fixtures/library
+        harden-runner: audit
         paths:
           ignore: []
+        policy:
+          push-develop: { overrides: { security: { repository-scan: { enabled: true }, sbom: { enabled: true } } } }
+          push-main: { overrides: { security: { repository-scan: { enabled: true }, sbom: { enabled: true } } } }
+          pull-request: { overrides: { security: { repository-scan: { enabled: true }, sbom: { enabled: true } } } }
         check:
           tasks: [check]
           reports:

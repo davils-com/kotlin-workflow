@@ -45,4 +45,4 @@ runs:
       shell: bash
       env:
         KW_PUBLICATIONS: ${{ steps.discover.outputs.publications }}
-      run: echo "tasks=$(jq --compact-output '[.[].task]' <<<"$KW_PUBLICATIONS")" >>"$GITHUB_OUTPUT"
+      run: echo "tasks=$(jq --compact-output '[.[].task]' <<<"$KW_PUBLICATIONS" | tr -d '\r')" >>"$GITHUB_OUTPUT"

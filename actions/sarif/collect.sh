@@ -7,6 +7,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/common.sh
+source "$here/../_lib/common.sh"
 output="${GITHUB_OUTPUT:-/dev/stdout}"
 target="${RUNNER_TEMP:-/tmp}/kotlin-workflow-${KW_CATEGORY:-sarif}.sarif"
 
