@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  # The actions the workflows and the composite actions pin, and the fixture's Gradle build.
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/actions/*"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(deps)"
+
+  - package-ecosystem: "gradle"
+    directory: "/fixtures/library"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      fixture:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(deps)"
