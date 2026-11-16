@@ -11,8 +11,8 @@ same run, so a commit is verified once. The last job, **Pipeline**, fails when a
 was cancelled and passes when the rest succeeded or was skipped on purpose. Require that one
 check.
 
-Inputs: `config-file`, `config`, `stages`, `dry-run`. Secrets, all optional: `maven-username`,
-`maven-password`, `signing-key`, `signing-key-id`, `signing-password`.
+Inputs: `config-file`, `config`, `stages`, `dry-run`. Secrets, all optional: `MAVEN_USERNAME`,
+`MAVEN_PASSWORD`, `SIGNING_KEY`, `SIGNING_KEY_ID`, `SIGNING_PASSWORD`.
 
 Permissions: `contents: write`, `actions: write`, `security-events: write`, `id-token: write`,
 `attestations: write`, `pages: write`, `pull-requests: read`.
@@ -68,8 +68,8 @@ runs in the environment `snapshot.environment`; restrict that environment to the
 branch. Uploads never run in parallel and are never cancelled. `snapshot.smoke` builds a
 consumer project against the snapshot afterwards.
 
-Permissions: `contents: read`, `pull-requests: read`. Secrets: `maven-username`,
-`maven-password`.
+Permissions: `contents: read`, `pull-requests: read`. Secrets: `MAVEN_USERNAME`,
+`MAVEN_PASSWORD`.
 
 ## release.yml
 
@@ -93,7 +93,7 @@ With `dry-run`, the gate takes the declared version and only warns about the bra
 runs, and nothing is uploaded, attested or released.
 
 Permissions: `contents: write`, `id-token: write`, `attestations: write`,
-`pull-requests: read`. Secrets: `maven-username`, `maven-password`, and the signing secrets
+`pull-requests: read`. Secrets: `MAVEN_USERNAME`, `MAVEN_PASSWORD`, and the signing secrets
 unless `release.sign` is off.
 
 ## docs.yml

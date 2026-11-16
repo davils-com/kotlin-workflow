@@ -27,11 +27,11 @@ jobs:
       pages: write
       pull-requests: read
     secrets:
-      maven-username: ${{ secrets.DAVILS_MAVEN_NAME }}
-      maven-password: ${{ secrets.DAVILS_MAVEN_SECRET }}
-      signing-key: ${{ secrets.SIGNING_KEY }}
-      signing-key-id: ${{ secrets.SIGNING_KEY_ID }}
-      signing-password: ${{ secrets.SIGNING_PASSWORD }}
+      MAVEN_USERNAME: ${{ secrets.DAVILS_MAVEN_NAME }}
+      MAVEN_PASSWORD: ${{ secrets.DAVILS_MAVEN_SECRET }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 ```
 
 Then require the status check **Pipeline / Pipeline** on your protected branches. That is all a

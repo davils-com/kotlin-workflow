@@ -10,8 +10,12 @@
 - A job that holds a secret restores no Gradle cache and keeps the configuration cache off:
   a cache was written by another job, and the configuration cache would store the credentials.
 - A release runs in an environment. Give it required reviewers; a snapshot's environment is
-  restricted to the development branch. An environment secret of the same name wins over an
-  organisation secret, which is how the snapshot job gets a token that writes snapshots only.
+  restricted to the development branch.
+- The workflows read the secrets `MAVEN_USERNAME`, `MAVEN_PASSWORD`, `SIGNING_KEY`,
+  `SIGNING_KEY_ID` and `SIGNING_PASSWORD`. The caller passes them, usually from organisation
+  secrets. A secret of the same name in the environment of a job wins over what the caller
+  passed: that is how the `snapshot` environment gets a token that writes snapshots only, and
+  how a signing key can live in the `release` environment alone.
 
 ## Who may write
 

@@ -33,7 +33,7 @@ for name in "$username_env" "$password_env"; do
 done
 
 if [ -z "${KW_MAVEN_USERNAME:-}" ] || [ -z "${KW_MAVEN_PASSWORD:-}" ]; then
-  fail "The repository token is empty. Pass the secrets maven-username and maven-password, and check that the environment of this job can see them."
+  fail "The repository token is empty. Pass the secrets MAVEN_USERNAME and MAVEN_PASSWORD, or define them in the environment of this job."
 fi
 
 export "$username_env=$KW_MAVEN_USERNAME"
@@ -42,7 +42,7 @@ export "$password_env=$KW_MAVEN_PASSWORD"
 if [ "${KW_SNAPSHOT:-false}" = "true" ]; then
   if [ "$(setting '.snapshot["kreate-snapshot"]')" = "true" ]; then export KREATE_SNAPSHOT=true; fi
 elif [ "$(setting '.release.sign')" = "true" ]; then
-  if [ -z "${KW_SIGNING_KEY:-}" ]; then fail "The signing key is empty. Pass the secret signing-key, or set release.sign to false."; fi
+  if [ -z "${KW_SIGNING_KEY:-}" ]; then fail "The signing key is empty. Pass the secret SIGNING_KEY, define it in the environment of this job, or set release.sign to false."; fi
   export ORG_GRADLE_PROJECT_signingInMemoryKey="$KW_SIGNING_KEY"
   export ORG_GRADLE_PROJECT_signingInMemoryKeyId="${KW_SIGNING_KEY_ID:-}"
   export ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="${KW_SIGNING_PASSWORD:-}"

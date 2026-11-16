@@ -36,19 +36,19 @@ on:
         type: boolean
         default: false
     secrets:
-      maven-username:
+      MAVEN_USERNAME:
         description: The name of the repository token.
         required: false
-      maven-password:
+      MAVEN_PASSWORD:
         description: The secret of the repository token.
         required: false
-      signing-key:
+      SIGNING_KEY:
         description: The ASCII-armoured signing key of a release.
         required: false
-      signing-key-id:
+      SIGNING_KEY_ID:
         description: The id of the signing key.
         required: false
-      signing-password:
+      SIGNING_PASSWORD:
         description: The password of the signing key.
         required: false
     outputs:
@@ -144,8 +144,8 @@ jobs:
     with:
       plan: ${{ needs.plan.outputs.config }}
     secrets:
-      maven-username: ${{ secrets.maven-username }}
-      maven-password: ${{ secrets.maven-password }}
+      MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+      MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
 
   release:
     name: Release
@@ -164,11 +164,11 @@ jobs:
       plan: ${{ needs.plan.outputs.config }}
       version: ${{ needs.plan.outputs.version }}
     secrets:
-      maven-username: ${{ secrets.maven-username }}
-      maven-password: ${{ secrets.maven-password }}
-      signing-key: ${{ secrets.signing-key }}
-      signing-key-id: ${{ secrets.signing-key-id }}
-      signing-password: ${{ secrets.signing-password }}
+      MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+      MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
   docs:
     name: Docs

@@ -24,10 +24,10 @@ on:
         type: string
         default: ''
     secrets:
-      maven-username:
+      MAVEN_USERNAME:
         description: The name of the repository token.
         required: true
-      maven-password:
+      MAVEN_PASSWORD:
         description: The secret of the repository token.
         required: true
 
@@ -112,8 +112,8 @@ jobs:
           config: ${{ env.KW_CONFIG }}
           tasks: ${{ toJSON(fromJSON(env.KW_CONFIG).publish.tasks) }}
           snapshot: 'true'
-          maven-username: ${{ secrets.maven-username }}
-          maven-password: ${{ secrets.maven-password }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}
 
       - name: Build a consumer project against the snapshot
         if: ${{ fromJSON(env.KW_CONFIG).snapshot.smoke.enabled }}
@@ -123,5 +123,5 @@ jobs:
           smoke: ${{ toJSON(fromJSON(env.KW_CONFIG).snapshot.smoke) }}
           snapshot: 'true'
           repository-url: ${{ fromJSON(env.KW_CONFIG).publish.repository.snapshots-url }}
-          maven-username: ${{ secrets.maven-username }}
-          maven-password: ${{ secrets.maven-password }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}
