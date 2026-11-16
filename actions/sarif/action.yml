@@ -1,0 +1,33 @@
+name: SARIF
+description: Sends the SARIF files that match a glob to code scanning as one run.
+
+inputs:
+  glob:
+    description: A glob of SARIF files. Empty switches the upload off.
+    default: ''
+  category:
+    description: The code scanning category, one per tool.
+    required: true
+  working-directory:
+    description: Where to look for the files.
+    default: '.'
+
+runs:
+  using: composite
+  steps:
+    - name: Collect the SARIF files
+      id: collect
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_GLOB: ${{ inputs.glob }}
+        KW_CATEGORY: ${{ inputs.category }}
+        KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: '"$KW_ACTION_PATH/collect.sh"'
+
+    - name: Upload to code scanning
+      if: steps.collect.outputs.file != ''
+      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      with:
+        sarif_file: ${{ steps.collect.outputs.file }}
+        category: ${{ inputs.category }}
