@@ -39,7 +39,9 @@ One job per runner of the matrix:
    so a finding that names no file, such as one about a dependency, is filed under
    `code-scanning.fallback-location`, the version catalog by default,
 5. writes test totals, line coverage and the assurance report to the job summary and keeps the
-   report files as an artifact, by default only when the job failed.
+   report files as an artifact, by default only when the job failed. A job that failed names its
+   failed tests as error annotations and in its summary, on every runner, so the reason is on the
+   page of the run; `check.summary.failed-tests` limits how many.
 
 `check.reproducible` adds a job that builds the same artifacts twice and compares their
 checksums. Each build starts with `check.reproducible.clean-tasks` as a Gradle invocation of

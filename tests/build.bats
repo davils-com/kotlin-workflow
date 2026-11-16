@@ -138,6 +138,61 @@ JSON
   grep -q 'Assurance passed.' "$GITHUB_STEP_SUMMARY"
 }
 
+failed_report() {
+  mkdir -p app/build/test-results/test
+  cat >app/build/test-results/test/TEST-com.example.PathTest.xml <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.PathTest" tests="4" skipped="0" failures="2" errors="1">
+  <testcase name="passes" classname="com.example.PathTest" time="0.1"/>
+  <testcase name="resolves a path: C:\tools, twice" classname="com.example.PathTest" time="0.2">
+    <failure message="expected:&lt;&quot;a/b&quot;&gt; but was:&lt;&quot;a\b&quot;&gt;&#10;second line 100%" type="java.lang.AssertionError">java.lang.AssertionError: expected
+	at com.example.PathTest.kt:12</failure>
+  </testcase>
+  <testcase name="reads a file" classname="com.example.PathTest" time="0.2">
+    <error message="No such file &amp; directory" type="java.io.IOException">java.io.IOException</error>
+  </testcase>
+  <testcase name="times out" classname="com.example.PathTest" time="9">
+    <failure type="java.lang.AssertionError">java.lang.AssertionError</failure>
+  </testcase>
+</testsuite>
+XML
+}
+
+@test "failed tests become error annotations and a list in the summary" {
+  failed_report
+  KW_LEG=check-reports-windows-latest KW_CONFIG="$(default_config | jq --compact-output '.')" \
+    run "$repository_root/actions/reports/failed-tests.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'::error title=Failed test%3A PathTest > resolves a path%3A C%3A\tools%2C twice::expected:<"a/b"> but was:<"a\b">%0Asecond line 100%25'* ]]
+  [[ "$output" == *'::error title=Failed test%3A PathTest > reads a file::No such file & directory'* ]]
+  [[ "$output" == *'::error title=Failed test%3A PathTest > times out::The test failed without a message.'* ]]
+  [[ "$output" != *"passes"* ]]
+  grep -q '### Failed tests (check-reports-windows-latest)' "$GITHUB_STEP_SUMMARY"
+  grep -q 'com.example.PathTest` > reads a file' "$GITHUB_STEP_SUMMARY"
+}
+
+@test "only as many failed tests are named as the limit allows" {
+  failed_report
+  KW_CONFIG="$(default_config | jq --compact-output '.check.summary["failed-tests"] = 1')" \
+    run "$repository_root/actions/reports/failed-tests.sh"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^::error' <<<"$output")" = "1" ]
+  [[ "$output" == *'::warning title=More failed tests::2 more tests failed'* ]]
+}
+
+@test "no failed test and a limit of zero name nothing" {
+  mkdir -p app/build/test-results/test
+  echo '<testsuite name="a" tests="1"><testcase name="passes" classname="a"/></testsuite>' >app/build/test-results/test/TEST-a.xml
+  KW_CONFIG="$(default_config | jq --compact-output '.')" run "$repository_root/actions/reports/failed-tests.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  failed_report
+  KW_CONFIG="$(default_config | jq --compact-output '.check.summary["failed-tests"] = 0')" \
+    run "$repository_root/actions/reports/failed-tests.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "the summary of a build without reports is empty" {
   KW_CONFIG="$(default_config | jq --compact-output '.')" run "$repository_root/actions/reports/summary.sh"
   [ "$status" -eq 0 ]

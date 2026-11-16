@@ -1,5 +1,5 @@
 name: Reports
-description: Writes the job summary of a check and keeps its report files as an artifact.
+description: Writes the job summary of a check, names its failed tests and keeps its report files as an artifact.
 
 inputs:
   config:
@@ -26,6 +26,16 @@ runs:
         KW_CONFIG: ${{ inputs.config }}
         KW_WORKING_DIRECTORY: ${{ fromJSON(inputs.config).working-directory }}
       run: '"$KW_ACTION_PATH/summary.sh"'
+
+    - name: Name the failed tests
+      if: inputs.status != 'success'
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_WORKING_DIRECTORY: ${{ fromJSON(inputs.config).working-directory }}
+        KW_LEG: ${{ inputs.name }}
+      run: '"$KW_ACTION_PATH/failed-tests.sh"'
 
     - name: Keep the reports
       if: >-
