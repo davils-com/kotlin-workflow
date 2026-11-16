@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs Gradle invocations, one after the other, each from a JSON list of tasks.
+# Runs Gradle invocations, one after the other, each from a JSON list of tasks. On Windows its
+# twin run.ps1 does the same from PowerShell.
 #
 # Environment:
 #   KW_INVOCATIONS          JSON list of invocations, each a list of tasks and their options

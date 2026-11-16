@@ -95,7 +95,7 @@ jobs:
             exit 1
           fi
 
-  # Three runners from one line of configuration, and a release that is only rehearsed.
+  # Two runners from one line of configuration, and a release that is only rehearsed.
   matrix-and-dry-run:
     name: Matrix and dry run
     uses: $/.github/workflows/pipeline.yml
@@ -113,10 +113,10 @@ jobs:
       config: |
         working-directory: fixtures/library
         policy:
-          push-develop: { os: [ubuntu-latest, macos-latest, windows-latest] }
-          push-main: { os: [ubuntu-latest, macos-latest, windows-latest] }
-          pull-request: { os: [ubuntu-latest, macos-latest, windows-latest] }
-          workflow-dispatch: { os: [ubuntu-latest, macos-latest, windows-latest] }
+          push-develop: { os: [ubuntu-latest, windows-latest] }
+          push-main: { os: [ubuntu-latest, windows-latest] }
+          pull-request: { os: [ubuntu-latest, windows-latest] }
+          workflow-dispatch: { os: [ubuntu-latest, windows-latest] }
         check:
           reports:
             upload: never

@@ -73,7 +73,7 @@ check:
 
 policy:
   push-develop:
-    os: [ubuntu-latest, macos-latest, windows-latest]
+    os: [ubuntu-latest, windows-latest]
 ```
 
 See [Configuration](Configuration.md) for the model and
