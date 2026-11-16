@@ -1,0 +1,376 @@
+name: Release
+
+# Releases a tag to the releases repository.
+#
+#   gate            the tag is on the release branch, matches the declared version, is no snapshot
+#   preflight       which publications the repository does not have yet, without credentials
+#   publish         builds without secrets, uploads signed, attests provenance and SBOM
+#   smoke           downloads the release as a consumer and verifies the attestations
+#   github-release  creates the GitHub release
+#
+# A dry run rehearses everything up to the upload and changes nothing.
+#
+# The caller runs the check stage first: this workflow publishes what it is given.
+#
+# The caller grants: contents: write, id-token: write, attestations: write, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+      version:
+        description: The version the tag carries, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      dry-run:
+        description: Rehearses the release without uploading anything.
+        type: boolean
+        default: false
+    secrets:
+      maven-username:
+        description: The name of the repository token.
+        required: true
+      maven-password:
+        description: The secret of the repository token.
+        required: true
+      signing-key:
+        description: The ASCII-armoured signing key.
+        required: false
+      signing-key-id:
+        description: The id of the signing key.
+        required: false
+      signing-password:
+        description: The password of the signing key.
+        required: false
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          dry-run: ${{ inputs.dry-run }}
+          token: ${{ github.token }}
+
+  gate:
+    name: Gate
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.gate.outputs.version }}
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check the release
+        id: gate
+        uses: $/actions/release-gate
+        with:
+          config: ${{ env.KW_CONFIG }}
+          version: ${{ inputs.version || needs.plan.outputs.version }}
+
+  # The releases repository refuses to overwrite a file, so a release that failed half way cannot
+  # simply be run again. This job decides, without credentials, which publications are missing.
+  preflight:
+    name: Preflight
+    needs: [plan, gate]
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && needs.gate.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      publications: ${{ steps.publications.outputs.publications }}
+      tasks: ${{ steps.publications.outputs.tasks }}
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        if: ${{ fromJSON(env.KW_CONFIG).release.publications.discovery == 'auto' }}
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+          tools: 'false'
+
+      - name: Tell the build its version
+        env:
+          KW_VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG")"
+          if [ -n "$name" ]; then echo "$name=$KW_VERSION" >>"$GITHUB_ENV"; fi
+
+      - name: List the publications
+        id: publications
+        uses: $/actions/publications
+        with:
+          config: ${{ env.KW_CONFIG }}
+          version: ${{ needs.gate.outputs.version }}
+
+  publish:
+    name: Publish the release
+    needs: [plan, gate, preflight]
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && needs.preflight.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.release }}
+    # The environment is the approval gate: give it required reviewers, because a release cannot
+    # be taken back once the repository serves it.
+    environment: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).release.environment }}
+    concurrency:
+      group: kotlin-workflow-release-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+      KW_DRY_RUN: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).release.dry-run }}
+    steps:
+      - name: Harden the runner
+        if: runner.os == 'Linux' && fromJSON(env.KW_CONFIG).harden-runner != 'off'
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache at all in the job that holds the signing key: what a cache restores was written
+      # by another job, and it would run here with access to the key.
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: disabled
+
+      - name: Tell the build its version
+        env:
+          KW_VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG")"
+          if [ -n "$name" ]; then echo "$name=$KW_VERSION" >>"$GITHUB_ENV"; fi
+
+      # Built before any secret exists in the job, and always in full, so that a run which only
+      # finishes an interrupted release still attests every artifact.
+      - name: Build
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).publish.build-tasks)) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          configuration-cache: 'false'
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Upload
+        if: env.KW_DRY_RUN != 'true'
+        uses: $/actions/publish
+        with:
+          config: ${{ env.KW_CONFIG }}
+          tasks: ${{ needs.preflight.outputs.tasks }}
+          maven-username: ${{ secrets.maven-username }}
+          maven-password: ${{ secrets.maven-password }}
+          signing-key: ${{ secrets.signing-key }}
+          signing-key-id: ${{ secrets.signing-key-id }}
+          signing-password: ${{ secrets.signing-password }}
+
+      - name: Attest the provenance of the released artifacts
+        if: ${{ env.KW_DRY_RUN != 'true' && fromJSON(env.KW_CONFIG).release.attest.provenance }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ join(fromJSON(env.KW_CONFIG).release.attest.subjects, fromJSON('"\n"')) }}
+
+      - name: Write a CycloneDX SBOM
+        if: ${{ env.KW_DRY_RUN != 'true' && fromJSON(env.KW_CONFIG).release.attest.sbom }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Attest the SBOM of the released artifacts
+        if: ${{ env.KW_DRY_RUN != 'true' && fromJSON(env.KW_CONFIG).release.attest.sbom }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ join(fromJSON(env.KW_CONFIG).release.attest.subjects, fromJSON('"\n"')) }}
+          sbom-path: sbom.cdx.json
+
+      - name: Keep the SBOM
+        if: ${{ env.KW_DRY_RUN != 'true' && fromJSON(env.KW_CONFIG).release.attest.sbom }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-sbom
+          path: sbom.cdx.json
+          retention-days: ${{ fromJSON(env.KW_CONFIG).retention.sbom }}
+
+  # What a consumer gets, checked the way a consumer gets it: without credentials, from the
+  # repository, into an empty Gradle home.
+  smoke:
+    name: Resolve the release as a consumer
+    needs: [plan, gate, preflight, publish]
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure' && needs.publish.result == 'success'
+      && !fromJSON(inputs.plan || needs.plan.outputs.config).release.dry-run && fromJSON(inputs.plan || needs.plan.outputs.config).release.smoke.enabled }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download every published file
+        uses: $/actions/download-release
+        with:
+          publications: ${{ needs.preflight.outputs.publications }}
+          repository-url: ${{ fromJSON(env.KW_CONFIG).publish.repository.releases-url }}
+          version: ${{ needs.gate.outputs.version }}
+          signed: ${{ fromJSON(env.KW_CONFIG).release.sign }}
+          directory: ${{ runner.temp }}/release
+
+      # The file the repository serves has to be the file this workflow built and attested. The
+      # attestation is signed by the shared workflow, so that is the signer to ask for.
+      - name: Verify the provenance of the served artifacts
+        if: ${{ fromJSON(env.KW_CONFIG).release.attest.provenance }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KW_DIRECTORY: ${{ runner.temp }}/release
+          KW_SIGNER: ${{ job.workflow_repository }}
+        run: |
+          found=0
+          for jar in "$KW_DIRECTORY"/*.jar; do
+            if [ ! -e "$jar" ]; then continue; fi
+            gh attestation verify "$jar" --repo "$GITHUB_REPOSITORY" --signer-repo "$KW_SIGNER"
+            found=$((found + 1))
+          done
+          echo "Verified $found artifact(s)."
+
+      - name: Set up
+        if: ${{ fromJSON(env.KW_CONFIG).release.smoke.project-dir != '' }}
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: disabled
+          tools: 'false'
+
+      - name: Build a consumer project against the release
+        if: ${{ fromJSON(env.KW_CONFIG).release.smoke.project-dir != '' }}
+        uses: $/actions/consumer-build
+        with:
+          config: ${{ env.KW_CONFIG }}
+          smoke: ${{ toJSON(fromJSON(env.KW_CONFIG).release.smoke) }}
+          version: ${{ needs.gate.outputs.version }}
+          repository-url: ${{ fromJSON(env.KW_CONFIG).publish.repository.releases-url }}
+
+  github-release:
+    name: GitHub release
+    needs: [plan, gate, publish]
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure' && needs.publish.result == 'success'
+      && !fromJSON(inputs.plan || needs.plan.outputs.config).release.dry-run && fromJSON(inputs.plan || needs.plan.outputs.config).release.github-release.enabled
+      && github.ref_type == 'tag' }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up
+        if: ${{ fromJSON(env.KW_CONFIG).release.github-release.notes == 'task' }}
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+          tools: 'false'
+
+      - name: Write the release notes
+        if: ${{ fromJSON(env.KW_CONFIG).release.github-release.notes == 'task' }}
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[["{0}","--release={1}"]]', fromJSON(env.KW_CONFIG).release.github-release.notes-task, needs.gate.outputs.version) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KW_TAG: ${{ github.ref_name }}
+          KW_VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          mode="$(jq --raw-output '.release["github-release"].notes' <<<"$KW_CONFIG")"
+          directory="$(jq --raw-output '.["working-directory"]' <<<"$KW_CONFIG")"
+          notes="$directory/$(jq --raw-output '.release["github-release"]["notes-file"]' <<<"$KW_CONFIG")"
+
+          if gh release view "$KW_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "The release $KW_TAG exists already."
+            exit 0
+          fi
+
+          if [ "$mode" = "task" ] && [ -s "$notes" ]; then
+            gh release create "$KW_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$KW_VERSION" --notes-file "$notes"
+          else
+            gh release create "$KW_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$KW_VERSION" --generate-notes
+          fi
