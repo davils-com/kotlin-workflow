@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Names the tests that failed, as error annotations of the job and in its summary, so a failure
 # is readable on the page of the run without opening a log or downloading a report.
+# The message of a test that ran a Gradle build starts at what went wrong in that build, not at
+# its arguments.
 #
 # Environment: KW_CONFIG (the resolved configuration as JSON), KW_WORKING_DIRECTORY,
 #              KW_LEG (the name of the matrix leg, for the heading of the summary)
@@ -43,7 +45,10 @@ failed="$(awk '
   /<testcase / { test = attribute($0, "name"); suite = attribute($0, "classname") }
   /<(failure|error)[ >]/ {
     if (test == "") next
-    print decoded(suite) "\t" decoded(test) "\t" substr(decoded(attribute($0, "message")), 1, 1500)
+    message = decoded(attribute($0, "message"))
+    reason = index(message, "* What went wrong:")
+    if (reason > 0) message = substr(message, reason)
+    print decoded(suite) "\t" decoded(test) "\t" substr(message, 1, 4000)
     test = ""
   }
 ' "${reports[@]}" | tr -d '\r')"
