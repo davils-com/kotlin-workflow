@@ -1,0 +1,223 @@
+name: Pipeline
+
+# The single entry of a project. It plans the run from the event that started it, calls the stage
+# workflows the plan names and ends in one job, Pipeline, which is the status check to require.
+#
+#   plan          resolves the configuration and decides the stages, the runners and the cache
+#   dependencies  regenerates locks and checksums on a pull request of Dependabot
+#   check         builds and verifies, once per commit; snapshot and release wait for it
+#   security      scans, the dependency review of a pull request and the dependency graph
+#   snapshot      publishes <version>-SNAPSHOT
+#   release       publishes a tag
+#   docs          builds and deploys the documentation
+#   benchmark     runs the benchmarks
+#
+# The caller grants the permissions of every stage, because GitHub checks them for each job a
+# workflow could run before it starts: contents: write, actions: write, security-events: write,
+# id-token: write, attestations: write, pages: write, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+      stages:
+        description: Comma separated stages that replace the policy of the event.
+        type: string
+        default: ''
+      dry-run:
+        description: Rehearses the release stage without uploading anything.
+        type: boolean
+        default: false
+    secrets:
+      maven-username:
+        description: The name of the repository token.
+        required: false
+      maven-password:
+        description: The secret of the repository token.
+        required: false
+      signing-key:
+        description: The ASCII-armoured signing key of a release.
+        required: false
+      signing-key-id:
+        description: The id of the signing key.
+        required: false
+      signing-password:
+        description: The password of the signing key.
+        required: false
+    outputs:
+      version:
+        description: The version a tag released, empty for every other event.
+        value: ${{ jobs.plan.outputs.version }}
+
+permissions: {}
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+      stages: ${{ steps.plan.outputs.stages }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          stages: ${{ inputs.stages }}
+          dry-run: ${{ inputs.dry-run }}
+          token: ${{ github.token }}
+
+  dependencies:
+    name: Dependencies
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.stages).dependencies }}
+    uses: $/.github/workflows/dependencies.yml
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+
+  # When the dependencies stage pushed a commit, this run is about a commit that is no longer the
+  # head of its pull request. The check belongs to the run of the new commit.
+  check:
+    name: Check
+    needs: [plan, dependencies]
+    if: >-
+      ${{ !cancelled() && needs.plan.result == 'success'
+          && needs.dependencies.result != 'failure' && needs.dependencies.outputs.pushed != 'true'
+          && fromJSON(needs.plan.outputs.stages).check }}
+    uses: $/.github/workflows/check.yml
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+      matrix: ${{ needs.plan.outputs.matrix }}
+
+  security:
+    name: Security
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.stages).security }}
+    uses: $/.github/workflows/security.yml
+    permissions:
+      contents: write
+      security-events: write
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+
+  # Publishing waits for the check of the same run, so a commit is verified exactly once.
+  snapshot:
+    name: Snapshot
+    needs: [plan, check]
+    if: >-
+      ${{ !cancelled() && needs.plan.result == 'success'
+          && (needs.check.result == 'success' || needs.check.result == 'skipped')
+          && fromJSON(needs.plan.outputs.stages).snapshot }}
+    uses: $/.github/workflows/snapshot.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+    secrets:
+      maven-username: ${{ secrets.maven-username }}
+      maven-password: ${{ secrets.maven-password }}
+
+  release:
+    name: Release
+    needs: [plan, check]
+    if: >-
+      ${{ !cancelled() && needs.plan.result == 'success'
+          && (needs.check.result == 'success' || needs.check.result == 'skipped')
+          && fromJSON(needs.plan.outputs.stages).release }}
+    uses: $/.github/workflows/release.yml
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+      version: ${{ needs.plan.outputs.version }}
+    secrets:
+      maven-username: ${{ secrets.maven-username }}
+      maven-password: ${{ secrets.maven-password }}
+      signing-key: ${{ secrets.signing-key }}
+      signing-key-id: ${{ secrets.signing-key-id }}
+      signing-password: ${{ secrets.signing-password }}
+
+  docs:
+    name: Docs
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.stages).docs }}
+    uses: $/.github/workflows/docs.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+
+  benchmark:
+    name: Benchmark
+    needs: plan
+    if: ${{ fromJSON(needs.plan.outputs.stages).benchmark }}
+    uses: $/.github/workflows/benchmark.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      plan: ${{ needs.plan.outputs.config }}
+
+  # The one status check to require. A stage that was skipped on purpose counts as passed, so a
+  # change of documentation alone still reports a result.
+  gate:
+    name: Pipeline
+    needs: [plan, dependencies, check, security, snapshot, release, docs, benchmark]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check the results
+        env:
+          KW_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          {
+            echo "### Pipeline"
+            echo
+            echo "| Stage | Result |"
+            echo "|---|---|"
+            jq --raw-output 'to_entries[] | "| \(.key) | \(.value.result) |"' <<<"$KW_RESULTS"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+          failed="$(jq --raw-output '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")' <<<"$KW_RESULTS")"
+          if [ -n "$failed" ]; then
+            echo "::error::Failed: $failed."
+            exit 1
+          fi
