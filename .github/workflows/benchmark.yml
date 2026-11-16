@@ -1,0 +1,105 @@
+name: Benchmark
+
+# Runs the benchmarks of a project and compares them with its baseline through Kreate. The
+# comparison becomes the job summary and an artifact.
+#
+# This workflow declares no secret. The caller grants: contents: read, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when pipeline.yml already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  benchmark:
+    name: Benchmark
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result != 'failure' }}
+    runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.benchmark }}
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Harden the runner
+        if: runner.os == 'Linux' && fromJSON(env.KW_CONFIG).harden-runner != 'off'
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: ${{ fromJSON(env.KW_CONFIG).harden-runner }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: read-only
+
+      - name: Benchmark
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).benchmark.tasks)) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Summarise the comparison
+        if: ${{ !cancelled() }}
+        uses: $/actions/summary-files
+        with:
+          glob: ${{ fromJSON(env.KW_CONFIG).benchmark.summary }}
+          title: Benchmark
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+
+      - name: Keep the comparison
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark
+          path: ${{ join(fromJSON(env.KW_CONFIG).benchmark.paths, fromJSON('"\n"')) }}
+          retention-days: ${{ fromJSON(env.KW_CONFIG).retention.benchmark }}
+          if-no-files-found: warn
