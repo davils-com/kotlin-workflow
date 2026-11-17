@@ -176,10 +176,13 @@ jobs:
       KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
       KW_DRY_RUN: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).release.dry-run }}
     steps:
+      # The whole history, as in the gate: a release guard of the build, such as kreateReleaseGuard
+      # of Kreate, checks again that the tag is on origin/<release branch> before it uploads.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       # No cache at all in the job that holds the signing key: what a cache restores was written
       # by another job, and it would run here with access to the key.
