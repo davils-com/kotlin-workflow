@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Downloads a published release the way a consumer would, without credentials, and checks that
-# every file a build needs is there. The JARs stay in KW_DIRECTORY so that their provenance can be
-# verified afterwards.
+# every file a build needs is there. The artifacts stay in KW_DIRECTORY so that their provenance
+# can be verified afterwards.
 #
 # A publication whose POM says <packaging>pom</packaging>, such as a plugin marker or a BOM, has
-# nothing but its POM. Every other one has a JAR, and a module file when Gradle published one.
+# nothing but its POM. Every other one has the artifact its packaging names: a klib for Kotlin/JS,
+# Kotlin/Wasm and Kotlin/Native, an AAR or a WAR, and a JAR for every other packaging or none. It
+# has a module file as well when Gradle published one.
 #
 # Environment: KW_PUBLICATIONS (JSON [{path, artifact, task}]), KW_REPOSITORY_URL, KW_VERSION,
 #              KW_SIGNED (true expects an .asc next to every file), KW_DIRECTORY
@@ -41,6 +43,16 @@ fetch_with_signature() {
   if [ "$signed" = "true" ]; then fetch "$1.asc"; fi
 }
 
+artifact_extension() {
+  local packaging
+  packaging="$(sed -n 's:.*<packaging>\([^<]*\)</packaging>.*:\1:p' "$1" | head -n 1)"
+  case "$packaging" in
+    pom) echo "" ;;
+    klib | aar | war) echo "$packaging" ;;
+    *) echo "jar" ;;
+  esac
+}
+
 exists() {
   [ "$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' --max-time 30 "$1")" = "200" ]
 }
@@ -50,8 +62,9 @@ while IFS=$'\t' read -r path artifact; do
   base="$repository/$path/$version/$artifact-$version"
 
   fetch_with_signature "$base.pom"
-  if grep --quiet '<packaging>pom</packaging>' "$directory/$artifact-$version.pom"; then continue; fi
+  extension="$(artifact_extension "$directory/$artifact-$version.pom")"
+  if [ -z "$extension" ]; then continue; fi
 
-  fetch_with_signature "$base.jar"
+  fetch_with_signature "$base.$extension"
   if exists "$base.module"; then fetch_with_signature "$base.module"; fi
 done < <(jq --raw-output '.[] | [.path, .artifact] | @tsv' <<<"$KW_PUBLICATIONS")

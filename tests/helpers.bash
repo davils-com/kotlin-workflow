@@ -57,8 +57,8 @@ publish_artifact() {
   echo "<project><packaging>$4</packaging></project>" >"$directory/$2-$3.pom"
   echo "signature" >"$directory/$2-$3.pom.asc"
   if [ "$4" != "pom" ]; then
-    echo "jar" >"$directory/$2-$3.jar"
-    echo "signature" >"$directory/$2-$3.jar.asc"
+    echo "$4" >"$directory/$2-$3.$4"
+    echo "signature" >"$directory/$2-$3.$4.asc"
   fi
   if [ "${5:-listed}" = "listed" ]; then
     echo "<metadata><versioning><versions><version>$3</version></versions></versioning></metadata>" \
