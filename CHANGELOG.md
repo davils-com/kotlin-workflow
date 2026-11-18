@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The smoke check of a release reads klibs.** It expected a JAR for every publication that is not a
+  POM, so the release of a Kotlin Multiplatform library failed on the klib of its Wasm publication
+  with "kore-core-wasm-js-2.0.0.jar is missing from the release". It now downloads the file the
+  packaging of the POM names, a klib, an AAR or a WAR, and a JAR for any other packaging, and
+  verifies the provenance of klibs, AARs and WARs as well as of JARs.
 - **A release guard of the build sees the release branch.** The publish job of `release.yml` checked
   out only the tag, so `kreateReleaseGuard` of Kreate, which checks again that the tag is on
   `origin/main`, stopped every release before the upload with "Git could not tell whether the

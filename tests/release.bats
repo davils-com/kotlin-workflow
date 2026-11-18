@@ -157,6 +157,37 @@ smoke() {
   [[ "$output" == *"library-1.0.0.jar.asc is missing"* ]]
 }
 
+@test "the smoke check finds the klib of a Kotlin/Wasm publication" {
+  serve_repository
+  publish_artifact com/example/library-wasm-js library-wasm-js 1.0.0 klib
+  publications='[{"path":"com/example/library-wasm-js","artifact":"library-wasm-js","task":":publishWasmJsPublicationToDavilsRepository"}]'
+  smoke
+  [ "$status" -eq 0 ]
+  [ -s "$workspace/downloads/library-wasm-js-1.0.0.klib" ]
+  [ -s "$workspace/downloads/library-wasm-js-1.0.0.klib.asc" ]
+  [ ! -e "$workspace/downloads/library-wasm-js-1.0.0.jar" ]
+}
+
+@test "the smoke check misses the klib of a Kotlin/Wasm publication" {
+  serve_repository
+  publish_artifact com/example/library-wasm-js library-wasm-js 1.0.0 klib
+  publications='[{"path":"com/example/library-wasm-js","artifact":"library-wasm-js","task":":publishWasmJsPublicationToDavilsRepository"}]'
+  rm "$workspace/repository/com/example/library-wasm-js/1.0.0/library-wasm-js-1.0.0.klib"
+  smoke
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"library-wasm-js-1.0.0.klib is missing"* ]]
+}
+
+@test "the smoke check reads a JAR for a packaging it does not know" {
+  serve_repository
+  publish_artifact com/example/library library 1.0.0 jar
+  publications='[{"path":"com/example/library","artifact":"library","task":":publishMavenPublicationToDavilsRepository"}]'
+  echo "<project><packaging>bundle</packaging></project>" >"$workspace/repository/com/example/library/1.0.0/library-1.0.0.pom"
+  smoke
+  [ "$status" -eq 0 ]
+  [ -s "$workspace/downloads/library-1.0.0.jar" ]
+}
+
 @test "the smoke check of an unsigned release asks for no signature" {
   serve_repository
   publish_artifact com/example/library library 1.0.0 jar

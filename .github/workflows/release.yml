@@ -291,9 +291,9 @@ jobs:
           KW_SIGNER: ${{ job.workflow_repository }}
         run: |
           found=0
-          for jar in "$KW_DIRECTORY"/*.jar; do
-            if [ ! -e "$jar" ]; then continue; fi
-            gh attestation verify "$jar" --repo "$GITHUB_REPOSITORY" --signer-repo "$KW_SIGNER"
+          for artifact in "$KW_DIRECTORY"/*.jar "$KW_DIRECTORY"/*.klib "$KW_DIRECTORY"/*.aar "$KW_DIRECTORY"/*.war; do
+            if [ ! -e "$artifact" ]; then continue; fi
+            gh attestation verify "$artifact" --repo "$GITHUB_REPOSITORY" --signer-repo "$KW_SIGNER"
             found=$((found + 1))
           done
           echo "Verified $found artifact(s)."
