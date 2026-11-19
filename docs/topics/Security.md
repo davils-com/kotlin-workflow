@@ -9,6 +9,12 @@
   the signing key are inputs of the single upload step and exist nowhere else in the job.
 - A job that holds a secret restores no Gradle cache and keeps the configuration cache off:
   a cache was written by another job, and the configuration cache would store the credentials.
+- The build of `check.yml`, of `security.yml` and of a snapshot reads the token of its job as
+  `GITHUB_TOKEN`, so that a build that asks the GitHub API, as Kreate's standards audit does,
+  gets a rate limit of its own. That token reads the repository and, in `check.yml` and
+  `security.yml`, writes code scanning; GitHub gives a pull request from a fork or from
+  Dependabot one that only reads. The builds of `release.yml` get no token: there it could
+  write attestations or the repository.
 - A release runs in an environment. Give it required reviewers; a snapshot's environment is
   restricted to the development branch.
 - The workflows read the secrets `MAVEN_USERNAME`, `MAVEN_PASSWORD`, `SIGNING_KEY`,

@@ -24,7 +24,7 @@ fake_gradlew() {
   cat >"$workspace/gradlew" <<'SCRIPT'
 #!/usr/bin/env bash
 echo "$*" >>"$(dirname "$0")/gradle-invocations"
-env | grep -E '^(DAVILS_MAVEN_|KREATE_SNAPSHOT|ORG_GRADLE_PROJECT_signing|CUSTOM_)' | sort >>"$(dirname "$0")/gradle-environment" || true
+env | grep -E '^(DAVILS_MAVEN_|KREATE_SNAPSHOT|ORG_GRADLE_PROJECT_signing|CUSTOM_|GITHUB_TOKEN=|KW_GITHUB_TOKEN=)' | sort >>"$(dirname "$0")/gradle-environment" || true
 if [ -n "${FAKE_GRADLE_OUTPUT:-}" ]; then printf '%s\n' "$FAKE_GRADLE_OUTPUT"; fi
 SCRIPT
   chmod +x "$workspace/gradlew"

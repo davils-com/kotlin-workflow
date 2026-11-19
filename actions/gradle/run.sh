@@ -7,12 +7,18 @@
 #   KW_ARGS                 JSON list of arguments added to every invocation
 #   KW_CONFIGURATION_CACHE  true, false or omit
 #   KW_WORKING_DIRECTORY    where the Gradle wrapper is
+#   KW_GITHUB_TOKEN         a token the build reads as GITHUB_TOKEN; empty passes none
 
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../_lib/common.sh
 source "$here/../_lib/common.sh"
+
+# The build reads the token under the name every tool knows, and only that once: an empty
+# GITHUB_TOKEN would read as a token to some tools.
+if [ -n "${KW_GITHUB_TOKEN:-}" ]; then export GITHUB_TOKEN="$KW_GITHUB_TOKEN"; fi
+unset KW_GITHUB_TOKEN
 
 case "${KW_CONFIGURATION_CACHE:-omit}" in
   true) cache_argument="--configuration-cache" ;;

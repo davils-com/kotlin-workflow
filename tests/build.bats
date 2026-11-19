@@ -26,6 +26,21 @@ teardown() {
   [ "$(cat "$workspace/gradle-invocations")" = "assemble --no-configuration-cache" ]
 }
 
+@test "gradle reads the token it is given as GITHUB_TOKEN, and nothing else" {
+  fake_gradlew
+  KW_INVOCATIONS='[["check"]]' KW_GITHUB_TOKEN=token run "$repository_root/actions/gradle/run.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$workspace/gradle-environment")" = "GITHUB_TOKEN=token" ]
+  [[ "$output" != *token* ]]
+}
+
+@test "gradle without a token gets no GITHUB_TOKEN, not even an empty one" {
+  fake_gradlew
+  env -u GITHUB_TOKEN KW_INVOCATIONS='[["check"]]' KW_GITHUB_TOKEN='' \
+    "$repository_root/actions/gradle/run.sh"
+  [ ! -s "$workspace/gradle-environment" ]
+}
+
 @test "an empty invocation runs nothing" {
   fake_gradlew
   KW_INVOCATIONS='[[], ["check"]]' run "$repository_root/actions/gradle/run.sh"

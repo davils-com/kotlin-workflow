@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The build asks the GitHub API with a token.** Gradle got no `GITHUB_TOKEN`, so Kreate's
+  standards audit shared the anonymous rate limit of the runner's address, and the check of the
+  Kreate 5.3.0 tag failed once with HTTP 403 from `api.github.com`. The builds of `check.yml`,
+  `security.yml` and of a snapshot now read the token of their job as `GITHUB_TOKEN`. The builds
+  of `release.yml` still get none, because the tokens of its jobs write.
 - **The smoke check of a release reads klibs.** It expected a JAR for every publication that is not a
   POM, so the release of a Kotlin Multiplatform library failed on the klib of its Wasm publication
   with "kore-core-wasm-js-2.0.0.jar is missing from the release". It now downloads the file the
