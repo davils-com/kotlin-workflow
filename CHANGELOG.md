@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- **`{releases-repository}` in the arguments of a consumer build.** The consumer build of a
+  snapshot learned only the snapshots repository, so a consumer that keeps `com.davils` to one
+  repository could not resolve a snapshot that depends on a released artifact of the group: a
+  develop build of Kreate failed with "Could not find com.davils:kore-core:2.1.1". The argument is
+  replaced by `publish.repository.releases-url`, for the consumer to list next to `{repository}`.
+
 ### Fixed
 
 - **The build asks the GitHub API with a token.** Gradle got no `GITHUB_TOKEN`, so Kreate's

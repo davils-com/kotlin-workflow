@@ -297,6 +297,16 @@ SCRIPT
   grep -q "DAVILS_MAVEN_NAME=name" "$workspace/gradle-environment"
 }
 
+@test "the consumer build of a snapshot also learns the releases repository" {
+  fake_gradlew
+  smoke='{"project-dir": "smoke", "tasks": ["detekt"], "args": ["-Pr={repository}", "-Preleases={releases-repository}"]}'
+  KW_CONFIG="$(default_config | jq --compact-output '.publish.repository["releases-url"] = "https://repo.example.com/releases"')" \
+    KW_SMOKE="$smoke" KW_VERSION=2.1.0-SNAPSHOT KW_SNAPSHOT=true KW_REPOSITORY_URL=https://repo.example.com/snapshots \
+    run "$repository_root/actions/consumer-build/build.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$workspace/gradle-invocations")" = "-p smoke detekt -Pr=https://repo.example.com/snapshots -Preleases=https://repo.example.com/releases --no-configuration-cache" ]
+}
+
 @test "the consumer build of a release uses the released version" {
   fake_gradlew
   smoke='{"project-dir": "smoke", "tasks": ["build"], "args": ["-Pv={version}"]}'

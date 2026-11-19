@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds a small consumer project against what was just published, the way a user of the library
 # would. `{version}` and `{repository}` in the arguments are replaced by the published version and
-# the repository URL.
+# the repository URL, `{releases-repository}` by publish.repository.releases-url: a snapshot can
+# depend on released artifacts of the same group, which its consumer finds only there.
 #
 # Environment:
 #   KW_CONFIG          the resolved configuration as JSON
@@ -46,11 +47,15 @@ if [ -n "${KW_MAVEN_USERNAME:-}" ] && [ -n "${KW_MAVEN_PASSWORD:-}" ]; then
   export "$(setting '.publish["password-env"]')=$KW_MAVEN_PASSWORD"
 fi
 
+releases_repository="$(setting '.publish.repository["releases-url"]')"
+
 arguments=()
 while IFS= read -r argument; do
   if [ -n "$argument" ]; then arguments+=("$argument"); fi
 done < <(jq --raw-output --arg version "$version" --arg repository "${KW_REPOSITORY_URL:-}" \
-  '(.tasks + .args)[] | gsub("\\{version\\}"; $version) | gsub("\\{repository\\}"; $repository)' <<<"$KW_SMOKE")
+  --arg releases "$releases_repository" \
+  '(.tasks + .args)[] | gsub("\\{version\\}"; $version) | gsub("\\{repository\\}"; $repository)
+    | gsub("\\{releases-repository\\}"; $releases)' <<<"$KW_SMOKE")
 
 if [ "${#arguments[@]}" -eq 0 ]; then fail "The smoke build is enabled, but smoke.tasks is empty."; fi
 

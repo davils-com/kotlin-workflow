@@ -74,7 +74,18 @@ Builds `publish.build-tasks` without any secret, then runs `publish.tasks` one b
 repository token, with `KREATE_SNAPSHOT=true` unless `snapshot.kreate-snapshot` is off. The job
 runs in the environment `snapshot.environment`; restrict that environment to the development
 branch. Uploads never run in parallel and are never cancelled. `snapshot.smoke` builds a
-consumer project against the snapshot afterwards.
+consumer project against the snapshot afterwards. In its arguments `{version}` is the snapshot
+version, `{repository}` the snapshots repository and `{releases-repository}` the releases
+repository. A snapshot can depend on a released artifact of its own group, such as a develop
+build of Kreate on a released kore, so a consumer that filters the group to one repository
+lists both:
+
+```kotlin
+exclusiveContent {
+    forRepositories(maven(snapshots), maven(releases))
+    filter { includeGroupAndSubgroups("com.davils") }
+}
+```
 
 Permissions: `contents: read`, `pull-requests: read`. Secrets: `MAVEN_USERNAME`,
 `MAVEN_PASSWORD`.
