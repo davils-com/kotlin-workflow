@@ -79,12 +79,14 @@ jobs:
           config: ${{ env.KW_CONFIG }}
           cache: read-only
 
+      # As in check.yml: the assurance gate asks the GitHub API under the token of the job.
       - name: Scan
         uses: $/actions/gradle
         with:
           invocations: ${{ format('[{0},{1}]', toJSON(fromJSON(env.KW_CONFIG).security.gradle.pre-tasks), toJSON(fromJSON(env.KW_CONFIG).security.gradle.tasks)) }}
           args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          github-token: ${{ github.token }}
 
       - name: Send the findings to code scanning
         if: ${{ !cancelled() }}

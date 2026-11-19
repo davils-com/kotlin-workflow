@@ -14,6 +14,11 @@ inputs:
   working-directory:
     description: Where the Gradle wrapper is.
     default: '.'
+  github-token:
+    description: >-
+      A token the build reads as GITHUB_TOKEN, such as for the rate limit of the GitHub API.
+      Empty leaves GITHUB_TOKEN out. Only for a job whose token cannot write anything that matters.
+    default: ''
 
 runs:
   using: composite
@@ -27,6 +32,7 @@ runs:
         KW_ARGS: ${{ inputs.args }}
         KW_CONFIGURATION_CACHE: ${{ inputs.configuration-cache }}
         KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        KW_GITHUB_TOKEN: ${{ inputs.github-token }}
       run: '"$KW_ACTION_PATH/run.sh"'
 
     # Git Bash renames variables of Windows, SystemRoot to SYSTEMROOT among them. A build that
@@ -41,4 +47,5 @@ runs:
         KW_ARGS: ${{ inputs.args }}
         KW_CONFIGURATION_CACHE: ${{ inputs.configuration-cache }}
         KW_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        KW_GITHUB_TOKEN: ${{ inputs.github-token }}
       run: '& "$env:KW_ACTION_PATH/run.ps1"'

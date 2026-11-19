@@ -99,6 +99,9 @@ jobs:
             '[.check.tasks + (if $primary then .check["primary-tasks"] else [] end)] + .check.invocations' <<<"$KW_CONFIG" | tr -d '\r')"
           echo "invocations=$invocations" >>"$GITHUB_OUTPUT"
 
+      # The token of the job reads the repository and writes code scanning. Without it a build
+      # that asks the GitHub API, as Kreate's standards audit does, shares the rate limit of the
+      # runner's address with everyone else on it.
       - name: Check
         uses: $/actions/gradle
         with:
@@ -106,6 +109,7 @@ jobs:
           args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
           configuration-cache: ${{ fromJSON(env.KW_CONFIG).gradle.configuration-cache }}
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          github-token: ${{ github.token }}
 
       # A pull request from a fork or from Dependabot has a token that cannot write to code
       # scanning, so the upload is left to the run on the branch.

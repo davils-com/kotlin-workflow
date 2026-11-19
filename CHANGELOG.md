@@ -7,8 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- **`{releases-repository}` in the arguments of a consumer build.** The consumer build of a
+  snapshot learned only the snapshots repository, so a consumer that keeps `com.davils` to one
+  repository could not resolve a snapshot that depends on a released artifact of the group: a
+  develop build of Kreate failed with "Could not find com.davils:kore-core:2.1.1". The argument is
+  replaced by `publish.repository.releases-url`, for the consumer to list next to `{repository}`.
+
 ### Fixed
 
+- **The build asks the GitHub API with a token.** Gradle got no `GITHUB_TOKEN`, so Kreate's
+  standards audit shared the anonymous rate limit of the runner's address, and the check of the
+  Kreate 5.3.0 tag failed once with HTTP 403 from `api.github.com`. The builds of `check.yml`,
+  `security.yml` and of a snapshot now read the token of their job as `GITHUB_TOKEN`. The builds
+  of `release.yml` still get none, because the tokens of its jobs write.
 - **The smoke check of a release reads klibs.** It expected a JAR for every publication that is not a
   POM, so the release of a Kotlin Multiplatform library failed on the klib of its Wasm publication
   with "kore-core-wasm-js-2.0.0.jar is missing from the release". It now downloads the file the

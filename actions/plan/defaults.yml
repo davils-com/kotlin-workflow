@@ -215,7 +215,9 @@ snapshot:
     enabled: false
     project-dir: ""
     tasks: []
-    # {version} and {repository} are replaced by the published version and the repository URL.
+    # {version} and {repository} are replaced by the published version and the repository URL,
+    # {releases-repository} by publish.repository.releases-url. A snapshot that depends on a
+    # released artifact of its own group needs both repositories in the consumer's filter.
     args: []
 
 release:

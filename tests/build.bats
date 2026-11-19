@@ -26,6 +26,21 @@ teardown() {
   [ "$(cat "$workspace/gradle-invocations")" = "assemble --no-configuration-cache" ]
 }
 
+@test "gradle reads the token it is given as GITHUB_TOKEN, and nothing else" {
+  fake_gradlew
+  KW_INVOCATIONS='[["check"]]' KW_GITHUB_TOKEN=token run "$repository_root/actions/gradle/run.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$workspace/gradle-environment")" = "GITHUB_TOKEN=token" ]
+  [[ "$output" != *token* ]]
+}
+
+@test "gradle without a token gets no GITHUB_TOKEN, not even an empty one" {
+  fake_gradlew
+  env -u GITHUB_TOKEN KW_INVOCATIONS='[["check"]]' KW_GITHUB_TOKEN='' \
+    "$repository_root/actions/gradle/run.sh"
+  [ ! -s "$workspace/gradle-environment" ]
+}
+
 @test "an empty invocation runs nothing" {
   fake_gradlew
   KW_INVOCATIONS='[[], ["check"]]' run "$repository_root/actions/gradle/run.sh"
@@ -280,6 +295,16 @@ SCRIPT
   [ "$status" -eq 0 ]
   [ "$(cat "$workspace/gradle-invocations")" = "-p smoke detekt -Pv=2.0.0-SNAPSHOT -Pr=https://repo.example.com/snapshots --no-configuration-cache" ]
   grep -q "DAVILS_MAVEN_NAME=name" "$workspace/gradle-environment"
+}
+
+@test "the consumer build of a snapshot also learns the releases repository" {
+  fake_gradlew
+  smoke='{"project-dir": "smoke", "tasks": ["detekt"], "args": ["-Pr={repository}", "-Preleases={releases-repository}"]}'
+  KW_CONFIG="$(default_config | jq --compact-output '.publish.repository["releases-url"] = "https://repo.example.com/releases"')" \
+    KW_SMOKE="$smoke" KW_VERSION=2.1.0-SNAPSHOT KW_SNAPSHOT=true KW_REPOSITORY_URL=https://repo.example.com/snapshots \
+    run "$repository_root/actions/consumer-build/build.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$workspace/gradle-invocations")" = "-p smoke detekt -Pr=https://repo.example.com/snapshots -Preleases=https://repo.example.com/releases --no-configuration-cache" ]
 }
 
 @test "the consumer build of a release uses the released version" {

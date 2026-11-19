@@ -10,8 +10,14 @@
 #   KW_ARGS                 JSON list of arguments added to every invocation
 #   KW_CONFIGURATION_CACHE  true, false or omit
 #   KW_WORKING_DIRECTORY    where the Gradle wrapper is
+#   KW_GITHUB_TOKEN         a token the build reads as GITHUB_TOKEN; empty passes none
 
 $ErrorActionPreference = 'Stop'
+
+# The build reads the token under the name every tool knows, and only that once: an empty
+# GITHUB_TOKEN would read as a token to some tools.
+if (-not [string]::IsNullOrEmpty($env:KW_GITHUB_TOKEN)) { $env:GITHUB_TOKEN = $env:KW_GITHUB_TOKEN }
+Remove-Item Env:KW_GITHUB_TOKEN -ErrorAction SilentlyContinue
 
 $cacheArgument = ''
 switch ("$env:KW_CONFIGURATION_CACHE") {

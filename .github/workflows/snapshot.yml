@@ -98,6 +98,7 @@ jobs:
         if: ${{ fromJSON(env.KW_CONFIG).snapshot.kreate-snapshot }}
         run: echo "KREATE_SNAPSHOT=true" >>"$GITHUB_ENV"
 
+      # The token of this job only reads, so the build may ask the GitHub API with it.
       - name: Build
         uses: $/actions/gradle
         with:
@@ -105,6 +106,7 @@ jobs:
           args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
           configuration-cache: 'false'
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          github-token: ${{ github.token }}
 
       - name: Upload
         uses: $/actions/publish
