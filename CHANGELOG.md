@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **A native runner sets a JDK of its own.** An entry of `native.runners` takes
+  `jdk: {distribution, version}`, which replaces `jdk` on that runner. Temurin publishes no JDK 25
+  for Windows on ARM, so konnect's natives for `windows-aarch64` could not even set up Java; with
+  `jdk: {distribution: microsoft}` the runner takes the OpenJDK of Microsoft.
+
+### Fixed
+
+- **A failed setup no longer hides behind a template error.** When a step before them failed, the
+  steps of the setup that set up Visual Studio read the empty list of tools and stopped the job
+  with "Error reading JToken from JsonReader", which buried the message of the step that failed.
+
 ## 1.1.3
 
 ### Fixed

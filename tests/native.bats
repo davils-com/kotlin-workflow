@@ -73,6 +73,8 @@ stage() {
   [ "$(config '.run["native-stages"] | join(",")')" = "snapshot,release" ]
   [ "$(config '[.native.runners[].platform] | join(",")')" = "windows-x86_64,windows-aarch64" ]
   [ "$(config '.native.runners[1]["runs-on"]')" = "windows-11-arm" ]
+  [ "$(config '.native.runners[1].jdk.distribution')" = "microsoft" ]
+  [ "$(config '.native.runners[0] | has("jdk")')" = "false" ]
   grep -q "| Natives | windows-x86_64, windows-aarch64 |" "$GITHUB_STEP_SUMMARY"
 }
 
@@ -121,6 +123,25 @@ stage() {
   [[ "$output" == *"native.runners: the platform linux-x86_64 is listed twice"* ]]
   [[ "$output" == *"native.stages: 'docs' is not one of check, snapshot, release"* ]]
   [[ "$output" == *"native.stage-task: empty, but native.runners lists runners"* ]]
+}
+
+@test "a runner may set the JDK of its own" {
+  push_to develop
+  export KW_CONFIG='native: { runners: [{ platform: windows-aarch64, runs-on: windows-11-arm, jdk: { distribution: microsoft, version: 25 } }] }'
+  plan
+  [ "$status" -eq 0 ]
+  [ "$(config '.native.runners[0].jdk.distribution')" = "microsoft" ]
+  [ "$(config '.jdk.distribution')" = "temurin" ]
+}
+
+@test "the JDK of a runner is validated" {
+  push_to develop
+  export KW_CONFIG='native: { runners: [{ platform: windows-aarch64, runs-on: windows-11-arm, jdk: { vendor: microsoft, distribution: [microsoft] } }, { platform: windows-x86_64, runs-on: windows-latest, jdk: microsoft }] }'
+  plan
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"native.runners[0].jdk.vendor: unknown option"* ]]
+  [[ "$output" == *"native.runners[0].jdk.distribution: expected string, got array"* ]]
+  [[ "$output" == *"native.runners[1].jdk: expected an object, got string"* ]]
 }
 
 @test "native options are validated like the rest" {

@@ -213,8 +213,9 @@ jobs:
           }
 
   # Two runners from one line of configuration, and a release that is only rehearsed. The release
-  # builds natives on Linux and Windows with a stand-in for kreateJniStage and hands them to the
-  # build it rehearses; the Windows runner sets up Visual Studio first.
+  # builds natives on Linux, Windows and Windows on ARM with a stand-in for kreateJniStage and hands
+  # them to the build it rehearses; the Windows runners set up Visual Studio first, and the ARM one
+  # takes the JDK of Microsoft, as Temurin publishes no JDK 25 for it.
   matrix-and-dry-run:
     name: Matrix and dry run
     uses: $/.github/workflows/pipeline.yml
@@ -257,6 +258,7 @@ jobs:
           runners:
             - { platform: linux-x86_64, runs-on: ubuntu-latest }
             - { platform: windows-x86_64, runs-on: windows-latest }
+            - { platform: windows-aarch64, runs-on: windows-11-arm, jdk: { distribution: microsoft } }
           stages: [release]
           stage-task: kotlinWorkflowStage
           build-tasks: []

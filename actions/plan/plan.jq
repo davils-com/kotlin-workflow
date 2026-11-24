@@ -15,7 +15,17 @@ def native_problems:
   | ($n.runners | to_entries[] | .key as $index | .value as $runner | "native.runners[\($index)]" as $at
      | if ($runner | type) != "object" then "\($at): expected an object, got \($runner | type)"
        else
-         ($runner | keys[] | select(. != "platform" and . != "runs-on") | "\($at).\(.): unknown option"),
+         ($runner | keys[] | select(. != "platform" and . != "runs-on" and . != "jdk") | "\($at).\(.): unknown option"),
+         (if ($runner | has("jdk")) then
+            ($runner.jdk) as $jdk
+            | if ($jdk | type) != "object" then "\($at).jdk: expected an object, got \($jdk | type)"
+              else
+                ($jdk | keys[] | select(. != "distribution" and . != "version") | "\($at).jdk.\(.): unknown option"),
+                ($jdk | to_entries[] | select(.key == "distribution" or .key == "version")
+                 | select((.value | type) != "string" and (.value | type) != "number")
+                 | "\($at).jdk.\(.key): expected string, got \(.value | type)")
+              end
+          else empty end),
          (if ($runner.platform | type) != "string" then "\($at).platform: expected a platform such as windows-x86_64"
           elif (native_platforms | index($runner.platform)) == null then "\($at).platform: '\($runner.platform)' is not one of \(native_platforms | join(", "))"
           else empty end),

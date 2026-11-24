@@ -276,7 +276,9 @@ release:
 # the publishing job collects them all and hands them to the build. Off while `runners` is empty.
 native:
   # One job per entry: {platform: <os>-<arch>, runs-on: <label or list of labels>}. The operating
-  # system is linux, windows or macos, the architecture x86_64 or aarch64.
+  # system is linux, windows or macos, the architecture x86_64 or aarch64. An entry may add
+  # `jdk: {distribution, version}` for a runner the JDK of `jdk` does not exist for, such as
+  # {distribution: microsoft} on windows-aarch64, where Temurin publishes no JDK 25.
   runners: []
   # The stages that publish the natives. A run that starts none of them builds none; check builds
   # them on its own without publishing anything.

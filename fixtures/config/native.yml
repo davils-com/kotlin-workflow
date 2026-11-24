@@ -6,7 +6,8 @@ native:
   stage-task: kreateJniStage
   runners:
     - { platform: windows-x86_64, runs-on: windows-latest }
-    - { platform: windows-aarch64, runs-on: windows-11-arm }
+    # Temurin publishes no JDK 25 for Windows on ARM; Microsoft does.
+    - { platform: windows-aarch64, runs-on: windows-11-arm, jdk: { distribution: microsoft } }
   tools:
     msvc: true
     cmake: true

@@ -98,6 +98,8 @@ jobs:
           config: ${{ env.KW_CONFIG }}
           cache: disabled
           tools: native
+          jdk-distribution: ${{ matrix.jdk.distribution }}
+          jdk-version: ${{ matrix.jdk.version }}
 
       # The stage names its version, and the publishing build refuses a stage of another version.
       - name: Mark the build as a snapshot
