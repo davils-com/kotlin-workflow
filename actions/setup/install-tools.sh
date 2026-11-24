@@ -4,8 +4,8 @@
 #
 # A tool that is on the PATH already is taken as it is. The developer environment of Visual Studio
 # is set up by msvc.ps1 in the step before, which puts the CMake and the Ninja of Visual Studio on
-# the PATH as well; this script only checks that its compiler is there. clang-tidy is the one
-# exception: next to Visual Studio it has to be the clang-tidy of Visual Studio.
+# the PATH as well, and the clang-tidy of Visual Studio at its end; this script only checks that
+# its compiler is there and that the clang-tidy found is that of Visual Studio.
 #
 # Environment:
 #   KW_TOOLS      the tools object as JSON, as tools.sh chose it
@@ -87,11 +87,8 @@ case "${RUNNER_OS:-}" in
     manager=choco
     if missing cmake; then wanted+=(cmake); fi
     if missing ninja; then wanted+=(ninja); fi
-    # With the developer environment of Visual Studio, clang-tidy reads the headers of its STL,
-    # which refuses a Clang older than the one Visual Studio ships. Its own LLVM therefore comes
-    # first, ahead of any other clang-tidy on the runner.
-    visual_studio_llvm="$(visual_studio_llvm)"
-    if wants clang-tidy && [ -n "$visual_studio_llvm" ]; then add_path "$visual_studio_llvm"; fi
+    # Next to Visual Studio, msvc-env.sh put the LLVM of Visual Studio at the end of the PATH; see
+    # the check of the clang-tidy that was found below.
     llvm="/c/Program Files/LLVM/bin"
     if missing clang-tidy && [ ! -x "$llvm/clang-tidy.exe" ]; then wanted+=(llvm); fi
     install choco install --yes --no-progress
@@ -106,6 +103,19 @@ esac
 if wants cmake; then cmake --version; fi
 if wants ninja; then printf "ninja "; ninja --version; fi
 if wants clang-tidy; then clang-tidy --version; fi
+# clang-tidy reads the headers of the STL of Visual Studio, which refuses a Clang older than the
+# one Visual Studio ships. Next to Visual Studio, the clang-tidy found has to be that one.
+visual_studio_llvm="$(visual_studio_llvm)"
+if wants clang-tidy && [ -n "$visual_studio_llvm" ]; then
+  found="$(command -v clang-tidy)"
+  case "$found" in
+    "$visual_studio_llvm"/*) ;;
+    *)
+      echo "::error::The clang-tidy on the PATH is $found, not the one of Visual Studio in $visual_studio_llvm. It would refuse the STL of Visual Studio."
+      exit 1
+      ;;
+  esac
+fi
 if wants cargo; then cargo --version; fi
 if wants msvc && [ "${RUNNER_OS:-}" = "Windows" ]; then
   if ! command -v cl.exe >/dev/null; then

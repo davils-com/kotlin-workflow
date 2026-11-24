@@ -219,29 +219,82 @@ SCRIPT
   [[ "$output" == *"LLVM"* ]]
 }
 
-@test "next to Visual Studio, Windows takes the clang-tidy of Visual Studio over any other" {
+# A Visual Studio with its LLVM for both architectures, and a clang-tidy of LLVM 20 elsewhere.
+visual_studio() {
   isolated_path
-  printf '#!/usr/bin/env bash\necho LLVM version 20\n' >"$workspace/fake/clang-tidy"
   printf '#!/usr/bin/env bash\n' >"$workspace/fake/cl.exe"
-  chmod +x "$workspace/fake/cl.exe"
-  mkdir -p "$workspace/vs/VC/Tools/Llvm/x64/bin" "$workspace/vs/VC/Tools/Llvm/ARM64/bin"
-  printf '#!/usr/bin/env bash\necho LLVM version 22 of Visual Studio x64\n' >"$workspace/vs/VC/Tools/Llvm/x64/bin/clang-tidy"
-  printf '#!/usr/bin/env bash\necho LLVM version 22 of Visual Studio ARM64\n' >"$workspace/vs/VC/Tools/Llvm/ARM64/bin/clang-tidy"
-  chmod +x "$workspace/fake/clang-tidy" "$workspace/vs/VC/Tools/Llvm/x64/bin/clang-tidy" "$workspace/vs/VC/Tools/Llvm/ARM64/bin/clang-tidy"
-  tools='{"cmake":false,"ninja":false,"clang-tidy":true,"msvc":true,"cargo":false,"packages":{}}'
+  printf '#!/usr/bin/env bash\necho LLVM version 20\n' >"$workspace/fake/clang-tidy"
+  chmod +x "$workspace/fake/cl.exe" "$workspace/fake/clang-tidy"
+  local architecture
+  for architecture in x64 ARM64; do
+    mkdir -p "$workspace/vs/VC/Tools/Llvm/$architecture/bin"
+    printf '#!/usr/bin/env bash\necho LLVM version 22 of Visual Studio %s\n' "$architecture" >"$workspace/vs/VC/Tools/Llvm/$architecture/bin/clang-tidy"
+    chmod +x "$workspace/vs/VC/Tools/Llvm/$architecture/bin/clang-tidy"
+  done
+  msvc_tools='{"cmake":false,"ninja":false,"clang-tidy":true,"msvc":true,"cargo":false,"packages":{}}'
+}
 
-  run env PATH="$isolated" RUNNER_OS=Windows RUNNER_ARCH=ARM64 VCINSTALLDIR="$workspace/vs/VC/" KW_TOOLS="$tools" \
-    "$repository_root/actions/setup/install-tools.sh"
+@test "next to Visual Studio, the clang-tidy of Visual Studio at the end of the PATH is taken" {
+  visual_studio
+  rm "$workspace/fake/clang-tidy"
+  run env PATH="$isolated:$workspace/vs/VC/Tools/Llvm/ARM64/bin" RUNNER_OS=Windows RUNNER_ARCH=ARM64 \
+    VCINSTALLDIR="$workspace/vs/VC/" KW_TOOLS="$msvc_tools" "$repository_root/actions/setup/install-tools.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"of Visual Studio ARM64"* ]]
-  [ "$(cat "$GITHUB_PATH")" = "$workspace/vs/VC/Tools/Llvm/ARM64/bin" ]
+  [ ! -s "$GITHUB_PATH" ]
+}
 
-  : >"$GITHUB_PATH"
-  run env PATH="$isolated" RUNNER_OS=Windows RUNNER_ARCH=X64 KW_TOOLS="$tools" \
+@test "next to Visual Studio, another clang-tidy ahead of it fails the job" {
+  visual_studio
+  run env PATH="$isolated:$workspace/vs/VC/Tools/Llvm/x64/bin" RUNNER_OS=Windows RUNNER_ARCH=X64 \
+    VCINSTALLDIR="$workspace/vs/VC/" KW_TOOLS="$msvc_tools" "$repository_root/actions/setup/install-tools.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error::The clang-tidy on the PATH is $workspace/fake/clang-tidy, not the one of Visual Studio"* ]]
+}
+
+@test "without Visual Studio, any clang-tidy on the PATH is taken" {
+  visual_studio
+  run env PATH="$isolated" RUNNER_OS=Windows RUNNER_ARCH=X64 KW_TOOLS="$msvc_tools" \
     "$repository_root/actions/setup/install-tools.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"LLVM version 20"* ]]
   [ ! -s "$GITHUB_PATH" ]
+}
+
+@test "the developer environment puts the LLVM of Visual Studio behind cl and names cl the compiler" {
+  visual_studio
+  dump "$workspace/before" 'Path=C:\Windows'
+  dump "$workspace/after" "Path=C:\\VS\\bin\\HostX64\\x64;C:\\Windows" "VCINSTALLDIR=$workspace/vs/VC/"
+  : >"$workspace/env"
+  KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" KW_CLANG_TIDY=true RUNNER_ARCH=X64 GITHUB_ENV="$workspace/env" \
+    run "$repository_root/actions/setup/msvc-env.sh"
+  [ "$status" -eq 0 ]
+  grep -qx "C:\\\\VS\\\\bin\\\\HostX64\\\\x64;C:\\\\Windows;$workspace/vs/VC/Tools/Llvm/x64/bin" "$workspace/env"
+  [ "$(sed -n '/^CC<</{n;p;}' "$workspace/env")" = "cl" ]
+  [ "$(sed -n '/^CXX<</{n;p;}' "$workspace/env")" = "cl" ]
+}
+
+@test "without clang-tidy the PATH of the developer environment stays as vcvarsall.bat made it" {
+  visual_studio
+  dump "$workspace/before" 'Path=C:\Windows'
+  dump "$workspace/after" 'Path=C:\VS\bin;C:\Windows' "VCINSTALLDIR=$workspace/vs/VC/"
+  : >"$workspace/env"
+  KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" KW_CLANG_TIDY=false GITHUB_ENV="$workspace/env" \
+    run "$repository_root/actions/setup/msvc-env.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'C:\\VS\\bin;C:\\Windows' "$workspace/env"
+  ! grep -q 'Llvm' "$workspace/env"
+}
+
+@test "a compiler the job named itself stays" {
+  dump "$workspace/before" 'CC=clang-cl' 'Path=C:\Windows'
+  dump "$workspace/after" 'CC=clang-cl' 'Path=C:\VS\bin;C:\Windows'
+  : >"$workspace/env"
+  KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" GITHUB_ENV="$workspace/env" \
+    run "$repository_root/actions/setup/msvc-env.sh"
+  [ "$status" -eq 0 ]
+  ! grep -q '^CC<<' "$workspace/env"
+  [ "$(sed -n '/^CXX<</{n;p;}' "$workspace/env")" = "cl" ]
 }
 
 @test "a tool that is still missing fails the job" {
@@ -269,8 +322,10 @@ dump() {
   KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" GITHUB_ENV="$workspace/env" \
     run "$repository_root/actions/setup/msvc-env.sh"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3 variable(s) set."* ]]
-  [ "$(grep -c '^[A-Za-z]*<<kw_' "$workspace/env")" = "3" ]
+  [[ "$output" == *"5 variable(s) set."* ]]
+  [ "$(grep -c '^[A-Za-z]*<<kw_' "$workspace/env")" = "5" ]
+  grep -q '^CC<<kw_' "$workspace/env"
+  grep -q '^CXX<<kw_' "$workspace/env"
   grep -q '^LIB<<kw_' "$workspace/env"
   grep -qx 'C:\\Program Files\\VS\\lib' "$workspace/env"
   grep -qx 'C:\\VS\\bin;C:\\Windows' "$workspace/env"

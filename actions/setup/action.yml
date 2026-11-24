@@ -63,6 +63,7 @@ runs:
         KW_ACTION_PATH: ${{ github.action_path }}
         KW_BEFORE: ${{ steps.msvc.outputs.before }}
         KW_AFTER: ${{ steps.msvc.outputs.after }}
+        KW_CLANG_TIDY: ${{ fromJSON(steps.tools.outputs.tools).clang-tidy }}
       run: '"$KW_ACTION_PATH/msvc-env.sh"'
 
     - name: Install native tools
