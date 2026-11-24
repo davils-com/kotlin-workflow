@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.2
+
+### Fixed
+
+- **clang-tidy next to Visual Studio is the clang-tidy of Visual Studio.** With `tools.msvc`,
+  `tools.clang-tidy` took the LLVM 20 that the Windows runner carries in `C:\Program Files\LLVM`.
+  clang-tidy reads the headers of the STL of Visual Studio, which refuses a Clang older than its
+  own, so every C++ file of konnect failed with "STL1000: Unexpected compiler version, expected
+  Clang 22 or newer" and "cannot use 'try' with exceptions disabled". The LLVM that Visual Studio
+  ships for the architecture of the runner now comes first on the `PATH`.
+
 ## 1.1.1
 
 ### Fixed

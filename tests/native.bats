@@ -219,6 +219,31 @@ SCRIPT
   [[ "$output" == *"LLVM"* ]]
 }
 
+@test "next to Visual Studio, Windows takes the clang-tidy of Visual Studio over any other" {
+  isolated_path
+  printf '#!/usr/bin/env bash\necho LLVM version 20\n' >"$workspace/fake/clang-tidy"
+  printf '#!/usr/bin/env bash\n' >"$workspace/fake/cl.exe"
+  chmod +x "$workspace/fake/cl.exe"
+  mkdir -p "$workspace/vs/VC/Tools/Llvm/x64/bin" "$workspace/vs/VC/Tools/Llvm/ARM64/bin"
+  printf '#!/usr/bin/env bash\necho LLVM version 22 of Visual Studio x64\n' >"$workspace/vs/VC/Tools/Llvm/x64/bin/clang-tidy"
+  printf '#!/usr/bin/env bash\necho LLVM version 22 of Visual Studio ARM64\n' >"$workspace/vs/VC/Tools/Llvm/ARM64/bin/clang-tidy"
+  chmod +x "$workspace/fake/clang-tidy" "$workspace/vs/VC/Tools/Llvm/x64/bin/clang-tidy" "$workspace/vs/VC/Tools/Llvm/ARM64/bin/clang-tidy"
+  tools='{"cmake":false,"ninja":false,"clang-tidy":true,"msvc":true,"cargo":false,"packages":{}}'
+
+  run env PATH="$isolated" RUNNER_OS=Windows RUNNER_ARCH=ARM64 VCINSTALLDIR="$workspace/vs/VC/" KW_TOOLS="$tools" \
+    "$repository_root/actions/setup/install-tools.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"of Visual Studio ARM64"* ]]
+  [ "$(cat "$GITHUB_PATH")" = "$workspace/vs/VC/Tools/Llvm/ARM64/bin" ]
+
+  : >"$GITHUB_PATH"
+  run env PATH="$isolated" RUNNER_OS=Windows RUNNER_ARCH=X64 KW_TOOLS="$tools" \
+    "$repository_root/actions/setup/install-tools.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"LLVM version 20"* ]]
+  [ ! -s "$GITHUB_PATH" ]
+}
+
 @test "a tool that is still missing fails the job" {
   isolated_path
   rm "$workspace/fake/apt-get"
