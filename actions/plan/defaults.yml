@@ -45,6 +45,11 @@ retention:
 tools:
   cmake: false
   cargo: false
+  ninja: false
+  clang-tidy: false
+  # The developer environment of Visual Studio for the architecture of the runner: cl, link and
+  # the Windows SDK on the PATH. Windows only; elsewhere it does nothing.
+  msvc: false
   # A Trivy version such as v0.76.2 installs it. Kreate provisions its own Trivy, so most
   # projects leave this empty.
   trivy: ""

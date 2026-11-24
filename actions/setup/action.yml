@@ -9,7 +9,9 @@ inputs:
     description: read-write, read-only or disabled. A job that holds a secret uses disabled.
     default: read-only
   tools:
-    description: Whether to install the native tools the configuration lists.
+    description: >-
+      Which native tools to install: true for those of `tools`, native for those of `tools` and
+      `native.tools`, false for none.
     default: 'true'
 
 runs:
@@ -35,12 +37,30 @@ runs:
         cache-read-only: ${{ inputs.cache != 'read-write' }}
         cache-disabled: ${{ inputs.cache == 'disabled' }}
 
-    - name: Install native tools
-      if: inputs.tools == 'true'
+    - name: Choose the native tools
+      id: tools
+      if: inputs.tools != 'false'
       shell: bash
       env:
         KW_ACTION_PATH: ${{ github.action_path }}
         KW_CONFIG: ${{ inputs.config }}
+        KW_TOOLS: ${{ inputs.tools }}
+      run: '"$KW_ACTION_PATH/tools.sh"'
+
+    # Before the installation, which then finds the CMake and the Ninja of Visual Studio.
+    - name: Set up the developer environment of Visual Studio
+      if: inputs.tools != 'false' && runner.os == 'Windows' && fromJSON(steps.tools.outputs.tools).msvc
+      shell: pwsh
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+      run: '& "$env:KW_ACTION_PATH/msvc.ps1"'
+
+    - name: Install native tools
+      if: inputs.tools != 'false'
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_TOOLS: ${{ steps.tools.outputs.tools }}
       run: '"$KW_ACTION_PATH/install-tools.sh"'
 
     - name: Install Trivy
