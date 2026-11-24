@@ -4,6 +4,33 @@
 
 def stage_names: ["dependencies", "check", "security", "snapshot", "release", "docs", "benchmark"];
 
+def native_platforms: ["linux", "windows", "macos"] | map(. as $os | ["x86_64", "aarch64"] | map($os + "-" + .)) | add;
+
+def native_stage_names: ["check", "snapshot", "release"];
+
+# The runners of the native stage are a list of objects the defaults cannot describe, so they are
+# checked here, after every layer is merged.
+def native_problems:
+  .native as $n
+  | ($n.runners | to_entries[] | .key as $index | .value as $runner | "native.runners[\($index)]" as $at
+     | if ($runner | type) != "object" then "\($at): expected an object, got \($runner | type)"
+       else
+         ($runner | keys[] | select(. != "platform" and . != "runs-on") | "\($at).\(.): unknown option"),
+         (if ($runner.platform | type) != "string" then "\($at).platform: expected a platform such as windows-x86_64"
+          elif (native_platforms | index($runner.platform)) == null then "\($at).platform: '\($runner.platform)' is not one of \(native_platforms | join(", "))"
+          else empty end),
+         (($runner["runs-on"]) as $labels
+          | if ($labels | type) == "string" and ($labels | length) > 0 then empty
+            elif ($labels | type) == "array" and ($labels | length) > 0 and all($labels[]; type == "string") then empty
+            else "\($at).runs-on: expected a runner label or a list of labels" end)
+       end),
+    ([$n.runners[] | objects | .platform | strings] | group_by(.) | map(select(length > 1) | .[0])[]
+     | "native.runners: the platform \(.) is listed twice"),
+    ($n.stages[] | . as $stage | select(native_stage_names | index($stage) == null)
+     | "native.stages: '\($stage)' is not one of \(native_stage_names | join(", "))"),
+    (if ($n.runners | length) > 0 and ($n["stage-task"] | length) == 0 then "native.stage-task: empty, but native.runners lists runners" else empty end),
+    (if ($n.runners | length) > 0 and ($n["stage-directory"] | length) == 0 then "native.stage-directory: empty, but native.runners lists runners" else empty end);
+
 def freeform($rel): ($rel == ["env"]) or ($rel == ["schedule", "crons"]);
 
 def is_overrides($rel): ($rel | length) == 3 and $rel[0] == "policy" and $rel[2] == "overrides";
@@ -88,7 +115,9 @@ def os_matrix:
            elif $event == "schedule" and ($merged.schedule.crons | has($cron)) then $merged.schedule.crons[$cron]
            else $policy.stages end) as $wanted
         | ($wanted - stage_names) as $unknown
+        | [$merged | native_problems] as $nativeErrors
         | if ($unknown | length) > 0 then {errors: ["unknown stage: \($unknown | join(", "))"]}
+          elif ($nativeErrors | length) > 0 then {errors: $nativeErrors}
           else
             ($merged.paths.ignore | map(glob_regex)) as $ignored
             | (["pull-request", "push-develop", "push-main", "push-other", "merge-group"] | index($event) != null) as $filtered
@@ -99,6 +128,8 @@ def os_matrix:
                elif $filtered and $onlyIgnored and ($stagesInput | length) == 0 then ($wanted | map(select(. == "docs")))
                else $wanted end) as $stages
             | (if $event == "tag" then released_version($merged) else "" end) as $version
+            | (if ($merged.native.runners | length) > 0 then $merged.native.stages else [] end) as $nativeStages
+            | any($nativeStages[]; . as $name | $stages | index($name) != null) as $native
             | (if (($event | startswith("push-")) and ($merged.gradle["cache-write-branches"] | index($refName) != null))
                then "read-write" else "read-only" end) as $cacheMode
             | ($merged
@@ -110,6 +141,7 @@ def os_matrix:
                    version: $version,
                    "cache-mode": $cacheMode,
                    "ref-name": $refName,
+                   "native-stages": $nativeStages,
                    "catalog-changed": ($changed == null
                      or ([.dependencies.catalog] + .dependencies.triggers | any(. as $path | $changed | index($path) != null)))
                  }) as $config
@@ -117,6 +149,7 @@ def os_matrix:
                 config: $config,
                 stages: (stage_names | map({key: ., value: (. as $name | $stages | index($name) != null)}) | from_entries),
                 matrix: ($policy.os | os_matrix),
+                natives: (if $native then [$merged.native.runners[].platform] else [] end),
                 event: $event,
                 version: $version,
                 reason: (if $skippedDraft then "the pull request is a draft"

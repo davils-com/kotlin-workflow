@@ -6,6 +6,7 @@
 # Environment:
 #   KW_CONFIG           the resolved configuration as JSON
 #   KW_TASKS            JSON list of upload tasks
+#   KW_ARGS             JSON list of arguments of every upload; empty takes gradle.args
 #   KW_SNAPSHOT         true publishes a snapshot
 #   KW_MAVEN_USERNAME, KW_MAVEN_PASSWORD
 #   KW_SIGNING_KEY, KW_SIGNING_KEY_ID, KW_SIGNING_PASSWORD   only for a signed release
@@ -51,7 +52,7 @@ fi
 arguments=()
 while IFS= read -r argument; do
   if [ -n "$argument" ]; then arguments+=("$argument"); fi
-done < <(jq --raw-output '.gradle.args[]' <<<"$KW_CONFIG")
+done < <(if [ -n "${KW_ARGS:-}" ]; then jq --raw-output '.[]' <<<"$KW_ARGS"; else jq --raw-output '.gradle.args[]' <<<"$KW_CONFIG"; fi)
 
 cd "$(setting '.["working-directory"]')"
 

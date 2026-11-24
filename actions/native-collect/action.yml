@@ -1,0 +1,37 @@
+name: Native collect
+description: Collects the stages of every native runner of the run and tells the publishing build where they are.
+
+inputs:
+  config:
+    description: The resolved configuration as JSON.
+    required: true
+  directory:
+    description: Where the stages are merged, outside the checkout.
+    required: true
+
+outputs:
+  args:
+    description: The arguments of every Gradle invocation of the publishing job as a JSON list, gradle.args included.
+    value: ${{ steps.collect.outputs.args }}
+  build-invocations:
+    description: The invocations of the build before the upload as JSON, publish.build-tasks and native.build-tasks.
+    value: ${{ steps.collect.outputs.build-invocations }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download the stages
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        pattern: kotlin-workflow-native-*
+        merge-multiple: true
+        path: ${{ inputs.directory }}
+
+    - name: Check the stages
+      id: collect
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_CONFIG: ${{ inputs.config }}
+        KW_DIRECTORY: ${{ inputs.directory }}
+      run: '"$KW_ACTION_PATH/collect.sh"'

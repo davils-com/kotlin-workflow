@@ -95,7 +95,9 @@ jobs:
             exit 1
           fi
 
-  # Two runners from one line of configuration, and a release that is only rehearsed.
+  # Two runners from one line of configuration, and a release that is only rehearsed. The release
+  # builds natives on Linux and Windows with a stand-in for kreateJniStage and hands them to the
+  # build it rehearses; the Windows runner sets up Visual Studio first.
   matrix-and-dry-run:
     name: Matrix and dry run
     uses: $/.github/workflows/pipeline.yml
@@ -134,3 +136,14 @@ jobs:
             enabled: false
           smoke:
             enabled: false
+        native:
+          runners:
+            - { platform: linux-x86_64, runs-on: ubuntu-latest }
+            - { platform: windows-x86_64, runs-on: windows-latest }
+          stages: [release]
+          stage-task: kotlinWorkflowStage
+          build-tasks: []
+          tools:
+            msvc: true
+            ninja: true
+            clang-tidy: true

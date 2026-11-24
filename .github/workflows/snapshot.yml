@@ -4,6 +4,9 @@ name: Snapshot
 # any secret in scope; the repository token exists only in the upload step and, for a private
 # repository, in the consumer build after it. A snapshot is never signed.
 #
+# With native.runners and `snapshot` in native.stages, the natives are built first, one job per
+# platform in native.yml, and the publishing job hands their stages to the build.
+#
 # The caller runs the check stage first: this workflow publishes what it is given.
 #
 # The caller grants: contents: read, pull-requests: read.
@@ -63,10 +66,26 @@ jobs:
           config: ${{ inputs.config }}
           token: ${{ github.token }}
 
+  native:
+    name: Natives
+    needs: plan
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure'
+          && contains(fromJSON(inputs.plan || needs.plan.outputs.config).run.native-stages, 'snapshot') }}
+    uses: $/.github/workflows/native.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      plan: ${{ inputs.plan || needs.plan.outputs.config }}
+      snapshot: true
+
   publish:
     name: Publish the snapshot
-    needs: plan
-    if: ${{ !cancelled() && needs.plan.result != 'failure' }}
+    needs: [plan, native]
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure'
+          && (needs.native.result == 'success' || needs.native.result == 'skipped') }}
     runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
     timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.snapshot }}
     # The environment restricts who may publish: limit it to the development branch.
@@ -98,12 +117,20 @@ jobs:
         if: ${{ fromJSON(env.KW_CONFIG).snapshot.kreate-snapshot }}
         run: echo "KREATE_SNAPSHOT=true" >>"$GITHUB_ENV"
 
+      - name: Collect the natives
+        id: native
+        if: needs.native.result == 'success'
+        uses: $/actions/native-collect
+        with:
+          config: ${{ env.KW_CONFIG }}
+          directory: ${{ runner.temp }}/kotlin-workflow-native
+
       # The token of this job only reads, so the build may ask the GitHub API with it.
       - name: Build
         uses: $/actions/gradle
         with:
-          invocations: ${{ format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).publish.build-tasks)) }}
-          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          invocations: ${{ steps.native.outputs.build-invocations || format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).publish.build-tasks)) }}
+          args: ${{ steps.native.outputs.args || toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
           configuration-cache: 'false'
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
           github-token: ${{ github.token }}
@@ -113,6 +140,7 @@ jobs:
         with:
           config: ${{ env.KW_CONFIG }}
           tasks: ${{ toJSON(fromJSON(env.KW_CONFIG).publish.tasks) }}
+          args: ${{ steps.native.outputs.args }}
           snapshot: 'true'
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_PASSWORD }}

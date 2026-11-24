@@ -1,0 +1,14 @@
+# A project that ships a JNI library for Windows, built on Windows runners of both architectures
+# and published with the library. tests/native.bats plans with it.
+version: 1
+
+native:
+  stage-task: kreateJniStage
+  runners:
+    - { platform: windows-x86_64, runs-on: windows-latest }
+    - { platform: windows-aarch64, runs-on: windows-11-arm }
+  tools:
+    msvc: true
+    cmake: true
+    ninja: true
+    clang-tidy: true

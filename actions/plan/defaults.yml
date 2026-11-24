@@ -34,6 +34,7 @@ timeout:
   security: 30
   snapshot: 30
   release: 45
+  native: 45
   docs: 20
   benchmark: 45
 
@@ -41,6 +42,9 @@ retention:
   reports: 7
   sbom: 90
   benchmark: 30
+  # The stages of the native runners. The publishing job of a release may wait for the approval
+  # of its environment, and the stages have to outlive that wait.
+  native: 7
 
 tools:
   cmake: false
@@ -266,6 +270,39 @@ release:
     args: []
   # Runs everything except the upload, the attestations and the GitHub release.
   dry-run: false
+
+# Native libraries built on a runner of their own platform each and published with the library,
+# through Kreate's JNI stage: every runner runs `stage-task` and keeps the stage as an artifact,
+# the publishing job collects them all and hands them to the build. Off while `runners` is empty.
+native:
+  # One job per entry: {platform: <os>-<arch>, runs-on: <label or list of labels>}. The operating
+  # system is linux, windows or macos, the architecture x86_64 or aarch64.
+  runners: []
+  # The stages that publish the natives. A run that starts none of them builds none; check builds
+  # them on its own without publishing anything.
+  stages: [snapshot, release]
+  # Builds the native libraries of the host and stages them with their manifests.
+  stage-task: kreateJniStage
+  # Where `stage-task` leaves the stage, relative to working-directory.
+  stage-directory: build/kreate/jni-stage
+  # Tools of the native runners only, in addition to `tools`.
+  tools:
+    cmake: false
+    cargo: false
+    ninja: false
+    clang-tidy: false
+    msvc: false
+    packages:
+      apt: []
+      brew: []
+      choco: []
+  # The Gradle properties of the publishing build: the directory of the collected stages and the
+  # platforms of `runners`, comma separated. An empty name passes nothing.
+  stage-property: kreate.jni.stage
+  platforms-property: kreate.jni.publishPlatforms
+  # Added to `publish.build-tasks` while the natives are published, so that a stage that does not
+  # fit the build stops it before any secret exists.
+  build-tasks: [kreateJniNativeJars]
 
 docs:
   # none, dokka or writerside

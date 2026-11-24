@@ -3,6 +3,7 @@ name: Release
 # Releases a tag to the releases repository.
 #
 #   gate            the tag is on the release branch, matches the declared version, is no snapshot
+#   native          with native.runners: builds the natives of the version on a runner per platform
 #   preflight       which publications the repository does not have yet, without credentials
 #   publish         builds without secrets, uploads signed, attests provenance and SBOM
 #   smoke           downloads the release as a consumer and verifies the attestations
@@ -156,10 +157,28 @@ jobs:
           config: ${{ env.KW_CONFIG }}
           version: ${{ needs.gate.outputs.version }}
 
+  # After the gate, so that a tag that cannot be released costs no native runner, and with the
+  # version of the gate, which the stage records and the publishing build compares.
+  native:
+    name: Natives
+    needs: [plan, gate]
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure' && needs.gate.result == 'success'
+          && contains(fromJSON(inputs.plan || needs.plan.outputs.config).run.native-stages, 'release') }}
+    uses: $/.github/workflows/native.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      plan: ${{ inputs.plan || needs.plan.outputs.config }}
+      version: ${{ needs.gate.outputs.version }}
+
   publish:
     name: Publish the release
-    needs: [plan, gate, preflight]
-    if: ${{ !cancelled() && needs.plan.result != 'failure' && needs.preflight.result == 'success' }}
+    needs: [plan, gate, preflight, native]
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure' && needs.preflight.result == 'success'
+          && (needs.native.result == 'success' || needs.native.result == 'skipped') }}
     runs-on: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).runs-on }}
     timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.release }}
     # The environment is the approval gate: give it required reviewers, because a release cannot
@@ -199,13 +218,24 @@ jobs:
           name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG" | tr -d '\r')"
           if [ -n "$name" ]; then echo "$name=$KW_VERSION" >>"$GITHUB_ENV"; fi
 
+      # The stages of the native runners, checked against native.runners. The build itself checks
+      # each against its manifest, including the commit it was built from.
+      - name: Collect the natives
+        id: native
+        if: needs.native.result == 'success'
+        uses: $/actions/native-collect
+        with:
+          config: ${{ env.KW_CONFIG }}
+          directory: ${{ runner.temp }}/kotlin-workflow-native
+
       # Built before any secret exists in the job, and always in full, so that a run which only
-      # finishes an interrupted release still attests every artifact.
+      # finishes an interrupted release still attests every artifact. With natives that includes
+      # the JAR of every platform.
       - name: Build
         uses: $/actions/gradle
         with:
-          invocations: ${{ format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).publish.build-tasks)) }}
-          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          invocations: ${{ steps.native.outputs.build-invocations || format('[{0}]', toJSON(fromJSON(env.KW_CONFIG).publish.build-tasks)) }}
+          args: ${{ steps.native.outputs.args || toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
           configuration-cache: 'false'
           working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
 
@@ -215,6 +245,7 @@ jobs:
         with:
           config: ${{ env.KW_CONFIG }}
           tasks: ${{ needs.preflight.outputs.tasks }}
+          args: ${{ steps.native.outputs.args }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_PASSWORD }}
           signing-key: ${{ secrets.SIGNING_KEY }}

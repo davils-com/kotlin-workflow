@@ -73,6 +73,9 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
   echo "| Event | \`$(jq --raw-output '.event' <<<"$plan")\` |"
   echo "| Stages | $(jq --raw-output '[.stages | to_entries[] | select(.value) | .key] | if length == 0 then "none" else join(", ") end' <<<"$plan") |"
   echo "| Runners | $(jq --raw-output '[.matrix[].name] | join(", ")' <<<"$plan") |"
+  if [ "$(jq '.natives | length' <<<"$plan")" != "0" ]; then
+    echo "| Natives | $(jq --raw-output '.natives | join(", ")' <<<"$plan") |"
+  fi
   echo "| Gradle cache | $(jq --raw-output '.config.run["cache-mode"]' <<<"$plan") |"
   version="$(jq --raw-output '.version' <<<"$plan")"
   if [ -n "$version" ]; then echo "| Version | \`$version\` |"; fi

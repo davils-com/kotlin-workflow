@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Natives built per platform and published with the library.** A project that publishes a JNI
+  library per platform with Kreate 5.5.0 lists a runner for each platform in `native.runners`.
+  `snapshot.yml` and `release.yml` then build the natives there first, in the new `native.yml`,
+  with `native.stage-task`, `kreateJniStage` by default, keep each stage as an artifact, and hand
+  them all to the publishing build with `-Pkreate.jni.stage` and `-Pkreate.jni.publishPlatforms`.
+  A release builds them after its gate with the version of the tag, discovers the platform
+  publications and uploads them before the library. `native.stages` lists `check` to try the
+  native build on every check. A project without `native.runners` runs as before.
+- **`tools.msvc`, `tools.ninja` and `tools.clang-tidy`.** `msvc` sets up the developer
+  environment of Visual Studio for the architecture of a Windows runner, `ninja` and
+  `clang-tidy` install the tools where they are missing. `native.tools` adds tools to the native
+  runners only.
+
 - **`{releases-repository}` in the arguments of a consumer build.** The consumer build of a
   snapshot learned only the snapshots repository, so a consumer that keeps `com.davils` to one
   repository could not resolve a snapshot that depends on a released artifact of the group: a

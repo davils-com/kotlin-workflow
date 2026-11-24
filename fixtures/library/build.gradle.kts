@@ -57,3 +57,34 @@ val nativeEnvironment = tasks.register("nativeEnvironment") {
 tasks.named("check") {
     dependsOn(nativeEnvironment)
 }
+
+// Stands in for kreateJniStage, which the fixture's Kreate does not have: stages a file for the
+// platform of the runner with the manifest kotlin-workflow's native stage checks. On Windows it
+// fails unless the developer environment of Visual Studio reached Gradle.
+tasks.register("kotlinWorkflowStage") {
+    description = "Stages a stand-in native library for the platform of the runner."
+    group = "build"
+    val osName = System.getProperty("os.name").lowercase()
+    val osArch = System.getProperty("os.arch").lowercase()
+    val isWindows = osName.startsWith("windows")
+    val operatingSystem = when {
+        isWindows -> "windows"
+        osName.startsWith("mac") -> "macos"
+        else -> "linux"
+    }
+    val architecture = if (osArch == "aarch64" || osArch == "arm64") "aarch64" else "x86_64"
+    val platform = "$operatingSystem-$architecture"
+    val visualStudio = providers.environmentVariable("VCINSTALLDIR").orNull
+    val stage = layout.buildDirectory.dir("kreate/jni-stage/kotlin-workflow-fixture/$platform").get().asFile
+    val manifest = "format=1\nplatform=$platform\ngroup=${project.group}\nartifact=kotlin-workflow-fixture\nversion=${project.version}\n"
+    outputs.upToDateWhen { false }
+    doLast {
+        if (isWindows && visualStudio.isNullOrEmpty()) {
+            throw GradleException("VCINSTALLDIR is not set: the developer environment of Visual Studio did not reach Gradle.")
+        }
+        stage.deleteRecursively()
+        stage.mkdirs()
+        stage.resolve("fixture.txt").writeText(platform)
+        stage.resolve("native.properties").writeText(manifest)
+    }
+}
