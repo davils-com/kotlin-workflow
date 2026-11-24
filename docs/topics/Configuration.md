@@ -82,6 +82,13 @@ For a tag the plan takes the version from the tag name, without `release.tag.pre
 the environment variable `release.version-env`, `CI_COMMIT_TAG` by default, which is where a
 Kreate project that sets `version { environment = "CI_COMMIT_TAG" }` reads it.
 
+## Native libraries
+
+`native.runners` lists a runner for every platform of a JNI library. The stages of
+`native.stages` then build the natives there first and publish them with the library; see
+[Native libraries](Native-Libraries.md). Each entry is `{platform, runs-on}`, and the plan
+refuses an unknown platform, a platform listed twice and an entry without a runner.
+
 ## Calling one stage
 
 Every stage workflow takes the same `config-file` and `config` inputs and plans for itself when

@@ -49,6 +49,17 @@ version: 1
 #   verification:
 #     tasks: [check]
 
+# A JNI library published per platform with Kreate: one runner per platform builds its natives
+# before a snapshot or a release publishes them.
+# native:
+#   runners:
+#     - { platform: windows-x86_64, runs-on: windows-latest }
+#     - { platform: windows-aarch64, runs-on: windows-11-arm }
+#   tools:
+#     msvc: true
+#     cmake: true
+#     ninja: true
+
 # A cron of the workflow file mapped to the stages it starts.
 # schedule:
 #   crons:

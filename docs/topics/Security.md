@@ -2,9 +2,14 @@
 
 ## Where secrets exist
 
-- `check.yml`, `security.yml`, `docs.yml`, `benchmark.yml` and `dependencies.yml` declare no
-  secret. The code they
+- `check.yml`, `security.yml`, `docs.yml`, `benchmark.yml`, `dependencies.yml` and `native.yml`
+  declare no secret. The code they
   build, its tests and its dependencies cannot read one.
+- The natives of a snapshot or a release are built by `native.yml`, without a secret and without
+  any Gradle cache, because they are published as they are. The publishing job takes them only
+  after checking that every platform came from the runner declared for it, and Kreate checks
+  each against the manifest of its runner: group, artifact, version, the SHA-256 of every file
+  and, for a release, the commit.
 - `snapshot.yml` and `release.yml` build first and upload afterwards. The repository token and
   the signing key are inputs of the single upload step and exist nowhere else in the job.
 - A job that holds a secret restores no Gradle cache and keeps the configuration cache off:

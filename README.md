@@ -99,6 +99,7 @@ check.
 | [`dependencies.yml`](.github/workflows/dependencies.yml) | Regenerates lock files and checksums on a pull request of Dependabot and commits them |
 | [`check.yml`](.github/workflows/check.yml) | Builds and verifies on a matrix of runners, sends SARIF to code scanning, summarises tests and coverage |
 | [`security.yml`](.github/workflows/security.yml) | Kreate's assurance gate and Trivy scans, a repository scan, an SBOM, dependency review, the dependency graph |
+| [`native.yml`](.github/workflows/native.yml) | Builds the natives of a JNI library on a runner per platform for a snapshot or a release |
 | [`snapshot.yml`](.github/workflows/snapshot.yml) | Publishes `<version>-SNAPSHOT` to the snapshots repository |
 | [`release.yml`](.github/workflows/release.yml) | Gate, preflight, signed upload, attestations, consumer smoke test, GitHub release |
 | [`docs.yml`](.github/workflows/docs.yml) | Dokka or Writerside to GitHub Pages |
@@ -112,6 +113,8 @@ The documentation is a Writerside project in [`docs`](docs), published to GitHub
 
 - [Configuration](docs/topics/Configuration.md): the layers, the events and the keys
 - [Workflows](docs/topics/Workflows.md): what each stage does and which permissions it needs
+- [Native libraries](docs/topics/Native-Libraries.md): JNI libraries built per platform and
+  published with the library
 - [Security](docs/topics/Security.md): where secrets exist and where they cannot
 - [Cost](docs/topics/Cost.md): what keeps the runner minutes down
 - [Adoption](docs/topics/Adoption.md): moving a project to these workflows
