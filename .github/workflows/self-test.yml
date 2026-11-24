@@ -97,13 +97,16 @@ jobs:
 
   # cmd.exe cuts off a variable of 8191 characters or more, and the resolved configuration of a
   # real project is that long. Setting up Visual Studio has to leave such a variable as it is.
-  long-variable:
-    name: Visual Studio next to a long variable
-    runs-on: windows-latest
-    timeout-minutes: 15
+  # The plan runs on Linux, as in every workflow: it needs yq.
+  long-variable-plan:
+    name: Plan a configuration with a long variable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -112,7 +115,6 @@ jobs:
 
       - name: Write a configuration with a long variable
         id: long
-        shell: bash
         run: |
           padding="$(printf 'x%.0s' $(seq 1 9000))"
           {
@@ -130,17 +132,39 @@ jobs:
           config: ${{ steps.long.outputs.config }}
           token: ${{ github.token }}
 
+  long-variable:
+    name: Visual Studio next to a long variable
+    needs: long-variable-plan
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ needs.long-variable-plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Set up
         uses: $/actions/setup
         with:
-          config: ${{ steps.plan.outputs.config }}
+          config: ${{ env.KW_CONFIG }}
           cache: disabled
 
-      - name: Expect the long variable whole and the compiler on the PATH
+      # The configuration is read again, as the steps of check.yml read it after the setup.
+      - name: Expect the long variables whole and the compiler on the PATH
         shell: bash
+        env:
+          KW_WORKING_DIRECTORY: ${{ fromJSON(env.KW_CONFIG).working-directory }}
         run: |
           if [ "${#KOTLIN_WORKFLOW_PADDING}" -ne 9000 ]; then
             echo "::error::KOTLIN_WORKFLOW_PADDING is ${#KOTLIN_WORKFLOW_PADDING} characters long, not 9000."
+            exit 1
+          fi
+          if [ "$KW_WORKING_DIRECTORY" != "fixtures/library" ]; then
+            echo "::error::KW_CONFIG did not survive the setup."
             exit 1
           fi
           command -v cl.exe
