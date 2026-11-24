@@ -1,12 +1,13 @@
 # Sets up the developer environment of Visual Studio for the architecture of the runner: runs
-# vcvarsall.bat and hands every variable it changed, PATH, INCLUDE and LIB among them, to the
-# later steps of the job. A CMake build then finds cl, link and the Windows SDK, as it would in a
+# vcvarsall.bat and writes the environment of cmd.exe before and after it, from which msvc-env.sh
+# hands every variable it changed, PATH, INCLUDE and LIB among them, to the later steps of the job. A CMake build then finds cl, link and the Windows SDK, as it would in a
 # Developer Command Prompt, whatever generator it uses.
 #
-# PowerShell, not Git Bash: Git Bash renames variables of Windows, and the names written here
-# have to be the ones cmd.exe knows.
+# PowerShell, not Git Bash: Git Bash renames variables of Windows, and the environment cmd.exe
+# prints has to carry the names Windows knows.
 #
-# Environment: RUNNER_ARCH (X64 or ARM64), RUNNER_TEMP, GITHUB_ENV
+# Environment: RUNNER_ARCH (X64 or ARM64), RUNNER_TEMP
+# Outputs (GITHUB_OUTPUT): before, after (the files `set` of cmd.exe wrote)
 
 $ErrorActionPreference = 'Stop'
 
@@ -37,14 +38,27 @@ if (-not (Test-Path $vcvars)) {
   exit 1
 }
 
-# A script of its own, so that no quoting of PowerShell reaches cmd.exe.
+# cmd.exe prints no variable of 8191 characters or more in full: it cuts it off and runs the next
+# variable into it. A variable that long, such as the resolved configuration of kotlin-workflow,
+# is left out of the environment of cmd.exe. vcvarsall.bat does not read it, and it stays as it
+# is in the later steps.
+$limit = 8000
+$long = @(Get-ChildItem Env: | Where-Object { $_.Name.Length + 1 + $_.Value.Length -ge $limit })
+foreach ($entry in $long) { Remove-Item -LiteralPath "Env:$($entry.Name)" }
+if ($long.Count -gt 0) { Write-Output "Left out of cmd.exe as too long: $(($long | ForEach-Object Name) -join ', ')." }
+
+# The environment as cmd.exe sees it, before and after vcvarsall.bat; msvc-env.sh hands on what
+# changed. A script of its own, so that no quoting of PowerShell reaches cmd.exe.
+$before = Join-Path $env:RUNNER_TEMP 'kotlin-workflow-msvc-before.txt'
+$after = Join-Path $env:RUNNER_TEMP 'kotlin-workflow-msvc-after.txt'
 $script = Join-Path $env:RUNNER_TEMP "kotlin-workflow-msvc-$([guid]::NewGuid().ToString('N')).cmd"
 Set-Content -Path $script -Encoding ascii -Value @(
+  "@set > `"$before`""
   "@call `"$vcvars`" $architecture >nul"
   '@if errorlevel 1 exit /b 1'
-  '@set'
+  "@set > `"$after`""
 )
-$lines = & cmd.exe /d /c $script
+& cmd.exe /d /c $script
 $exitCode = $LASTEXITCODE
 Remove-Item $script -ErrorAction SilentlyContinue
 if ($exitCode -ne 0) {
@@ -52,20 +66,8 @@ if ($exitCode -ne 0) {
   exit 1
 }
 
-# The names of the environment of Windows ignore case, and so does this table.
-$before = @{}
-foreach ($entry in Get-ChildItem Env:) { $before[$entry.Name] = $entry.Value }
-
-$delimiter = "kw_$([guid]::NewGuid().ToString('N'))"
-$changed = 0
-foreach ($line in $lines) {
-  $index = $line.IndexOf('=')
-  if ($index -le 0) { continue }
-  $name = $line.Substring(0, $index)
-  $value = $line.Substring($index + 1)
-  if ($before.ContainsKey($name) -and $before[$name] -ceq $value) { continue }
-  Add-Content -Path $env:GITHUB_ENV -Encoding utf8 -Value @("$name<<$delimiter", $value, $delimiter)
-  $changed++
-}
-
-Write-Output "Visual Studio $installation, ${architecture}: $changed variable(s) set."
+Add-Content -Path $env:GITHUB_OUTPUT -Encoding utf8 -Value @(
+  "before=$($before -replace '\\', '/')"
+  "after=$($after -replace '\\', '/')"
+)
+Write-Output "Visual Studio $installation, ${architecture}."
