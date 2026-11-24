@@ -68,4 +68,4 @@ foreach ($line in $lines) {
   $changed++
 }
 
-Write-Output "Visual Studio $installation, $architecture: $changed variable(s) set."
+Write-Output "Visual Studio $installation, ${architecture}: $changed variable(s) set."
