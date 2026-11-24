@@ -31,6 +31,16 @@ A platform is `linux`, `windows` or `macos` followed by `x86_64` or `aarch64`, t
 Kreate. `runs-on` is a runner label or a list of labels. A project without `native.runners`
 builds no natives, and nothing about its pipeline changes.
 
+A runner takes the JDK of `jdk` unless its entry names one of its own. Temurin publishes no JDK 25
+for Windows on ARM, so that runner needs another distribution of `actions/setup-java`:
+
+```yaml
+native:
+  runners:
+    - { platform: windows-x86_64, runs-on: windows-latest }
+    - { platform: windows-aarch64, runs-on: windows-11-arm, jdk: { distribution: microsoft } }
+```
+
 ## What runs
 
 | Stage | Natives |
