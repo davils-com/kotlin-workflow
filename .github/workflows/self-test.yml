@@ -188,7 +188,7 @@ jobs:
           )
           (Get-Command clang-tidy).Source
           clang-tidy --version
-          clang-tidy $source '--checks=-*' '--extra-arg-before=--driver-mode=cl' -- /EHsc /std:c++20 /W4
+          clang-tidy $source '--checks=-*,bugprone-use-after-move' '--extra-arg-before=--driver-mode=cl' -- /EHsc /std:c++20 /W4
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
   # Two runners from one line of configuration, and a release that is only rehearsed. The release
