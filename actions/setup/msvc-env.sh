@@ -10,9 +10,9 @@
 #
 # The developer environment means the compiler of Visual Studio: CC and CXX become cl, unless the
 # job set them already, so that CMake takes cl whatever else is on the PATH. When the job wants
-# clang-tidy, the LLVM that Visual Studio ships for the architecture of the runner goes to the end
-# of the PATH: its clang-tidy reads the STL of Visual Studio, and its clang and clang++ stay behind
-# cl.
+# clang-tidy, the LLVM that Visual Studio ships for the architecture of the runner goes behind the
+# entries vcvarsall.bat put in front of the PATH: its clang-tidy, which reads the STL of Visual
+# Studio, comes before any other LLVM of the runner, and its clang and clang++ come after cl.
 #
 # Environment:
 #   KW_BEFORE, KW_AFTER  the files `set` of cmd.exe wrote
@@ -44,9 +44,30 @@ if ! awk -v limit=8191 '
   exit 1
 fi
 
-# value_of <name>: the value of a variable after vcvarsall.bat, whatever the case of its name.
+# value_of <name> [file]: the value of a variable after vcvarsall.bat, or in the file given,
+# whatever the case of its name.
 value_of() {
-  tr -d '\r' <"$after" | awk -v name="$1" 'index($0, "=") > 1 && tolower(substr($0, 1, index($0, "=") - 1)) == tolower(name) { print substr($0, index($0, "=") + 1); exit }'
+  tr -d '\r' <"${2:-$after}" | awk -v name="$1" 'index($0, "=") > 1 && tolower(substr($0, 1, index($0, "=") - 1)) == tolower(name) { print substr($0, index($0, "=") + 1); exit }'
+}
+
+# with_llvm <path>: the PATH vcvarsall.bat built with the LLVM of Visual Studio behind the entries
+# vcvarsall.bat put in front, cl among them, and ahead of the PATH the job had before, which may
+# hold another LLVM. The values reach awk through its environment: -v would read \t in C:\tools
+# as a tab.
+with_llvm() {
+  KW_PATH_AFTER="$1" KW_PATH_BEFORE="$(value_of Path "$before")" KW_LLVM="$llvm" awk 'BEGIN {
+    count = split(ENVIRON["KW_PATH_BEFORE"], previous, ";")
+    for (i = 1; i <= count; i++) if (previous[i] != "") known[tolower(previous[i])] = 1
+    count = split(ENVIRON["KW_PATH_AFTER"], entries, ";")
+    result = ""
+    inserted = 0
+    for (i = 1; i <= count; i++) {
+      if (!inserted && (tolower(entries[i]) in known)) { result = result (result == "" ? "" : ";") ENVIRON["KW_LLVM"]; inserted = 1 }
+      result = result (result == "" ? "" : ";") entries[i]
+    }
+    if (!inserted) result = result (result == "" ? "" : ";") ENVIRON["KW_LLVM"]
+    print result
+  }'
 }
 
 is_set() {
@@ -89,7 +110,7 @@ while IFS= read -r line; do
   name="${line%%=*}"
   value="${line#*=}"
   if [ -n "$llvm" ] && [ "$(tr '[:upper:]' '[:lower:]' <<<"$name")" = "path" ]; then
-    value="$value;$llvm"
+    value="$(with_llvm "$value")"
     path_written=true
   fi
   entry "$name" "$value"
@@ -97,7 +118,7 @@ while IFS= read -r line; do
 done <"$changes"
 
 if [ -n "$llvm" ] && [ "$path_written" = "false" ]; then
-  entry Path "$(value_of Path);$llvm"
+  entry Path "$(with_llvm "$(value_of Path)")"
   count=$((count + 1))
 fi
 
@@ -109,4 +130,4 @@ done
 
 cat "$entries" >>"$GITHUB_ENV"
 echo "$count variable(s) set."
-if [ -n "$llvm" ]; then echo "clang-tidy of Visual Studio, behind cl: $llvm"; fi
+if [ -n "$llvm" ]; then echo "clang-tidy of Visual Studio, behind cl and ahead of the PATH of the runner: $llvm"; fi

@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Next to Visual Studio, CMake compiles with cl again.** 1.1.2 put the LLVM of Visual Studio
   first on the `PATH` for its clang-tidy, and with it its `clang` and `clang++`, so CMake built the
   JNI library of konnect with `clang++` in GNU mode instead of with `cl`, without the hardening of
-  MSVC. The LLVM of Visual Studio now goes to the end of the `PATH` that `vcvarsall.bat` builds, the
-  setup fails when another clang-tidy comes before it, and `tools.msvc` sets `CC` and `CXX` to `cl`
-  unless the job set them.
+  MSVC. The LLVM of Visual Studio now goes behind the entries `vcvarsall.bat` puts in front of the
+  `PATH`, after `cl` and ahead of the LLVM the Windows runner carries, the setup fails when another
+  clang-tidy comes before it, and `tools.msvc` sets `CC` and `CXX` to `cl` unless the job set them.
 
 ## 1.1.2
 

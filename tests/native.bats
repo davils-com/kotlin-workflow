@@ -261,15 +261,17 @@ visual_studio() {
   [ ! -s "$GITHUB_PATH" ]
 }
 
-@test "the developer environment puts the LLVM of Visual Studio behind cl and names cl the compiler" {
+@test "the developer environment puts the LLVM of Visual Studio behind cl, ahead of any other LLVM, and names cl the compiler" {
   visual_studio
-  dump "$workspace/before" 'Path=C:\Windows'
-  dump "$workspace/after" "Path=C:\\VS\\bin\\HostX64\\x64;C:\\Windows" "VCINSTALLDIR=$workspace/vs/VC/"
+  dump "$workspace/before" 'Path=C:\tools\bin;C:\Program Files\LLVM\bin;C:\Windows'
+  dump "$workspace/after" 'Path=C:\VS\bin\HostX64\x64;C:\VS\IDE;C:\tools\bin;C:\Program Files\LLVM\bin;C:\Windows' \
+    "VCINSTALLDIR=$workspace/vs/VC/"
   : >"$workspace/env"
   KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" KW_CLANG_TIDY=true RUNNER_ARCH=X64 GITHUB_ENV="$workspace/env" \
     run "$repository_root/actions/setup/msvc-env.sh"
   [ "$status" -eq 0 ]
-  grep -qx "C:\\\\VS\\\\bin\\\\HostX64\\\\x64;C:\\\\Windows;$workspace/vs/VC/Tools/Llvm/x64/bin" "$workspace/env"
+  expected="C:\\VS\\bin\\HostX64\\x64;C:\\VS\\IDE;$workspace/vs/VC/Tools/Llvm/x64/bin;C:\\tools\\bin;C:\\Program Files\\LLVM\\bin;C:\\Windows"
+  [ "$(sed -n '/^Path<</{n;p;}' "$workspace/env")" = "$expected" ]
   [ "$(sed -n '/^CC<</{n;p;}' "$workspace/env")" = "cl" ]
   [ "$(sed -n '/^CXX<</{n;p;}' "$workspace/env")" = "cl" ]
 }

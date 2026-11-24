@@ -4,7 +4,7 @@
 #
 # A tool that is on the PATH already is taken as it is. The developer environment of Visual Studio
 # is set up by msvc.ps1 in the step before, which puts the CMake and the Ninja of Visual Studio on
-# the PATH as well, and the clang-tidy of Visual Studio at its end; this script only checks that
+# the PATH as well, and the clang-tidy of Visual Studio behind cl; this script only checks that
 # its compiler is there and that the clang-tidy found is that of Visual Studio.
 #
 # Environment:
@@ -87,7 +87,7 @@ case "${RUNNER_OS:-}" in
     manager=choco
     if missing cmake; then wanted+=(cmake); fi
     if missing ninja; then wanted+=(ninja); fi
-    # Next to Visual Studio, msvc-env.sh put the LLVM of Visual Studio at the end of the PATH; see
+    # Next to Visual Studio, msvc-env.sh put the LLVM of Visual Studio behind cl on the PATH; see
     # the check of the clang-tidy that was found below.
     llvm="/c/Program Files/LLVM/bin"
     if missing clang-tidy && [ ! -x "$llvm/clang-tidy.exe" ]; then wanted+=(llvm); fi
