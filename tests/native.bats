@@ -229,6 +229,44 @@ SCRIPT
   [ ! -e "$workspace/fake/ninja" ]
 }
 
+# What `set` of cmd.exe prints, with the line ends of Windows: dump <file> <line...>
+dump() {
+  local file="$1"
+  shift
+  printf '%s\r\n' "$@" >"$file"
+}
+
+@test "the variables vcvarsall.bat set or changed are handed on, and nothing else" {
+  long="KW_CONFIG={\"padding\":\"$(printf 'x%.0s' $(seq 1 9000))\"}"
+  dump "$workspace/before" '=C:=C:\a' "$long" 'INCLUDE=' 'Path=C:\Windows' 'TEMP=D:\a\_temp'
+  dump "$workspace/after" '=C:=C:\b' "$long" 'INCLUDE=C:\VS\include' 'LIB=C:\Program Files\VS\lib' 'Path=C:\VS\bin;C:\Windows' 'TEMP=D:\a\_temp'
+  : >"$workspace/env"
+  KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" GITHUB_ENV="$workspace/env" \
+    run "$repository_root/actions/setup/msvc-env.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"3 variable(s) set."* ]]
+  [ "$(grep -c '^[A-Za-z]*<<kw_' "$workspace/env")" = "3" ]
+  grep -q '^LIB<<kw_' "$workspace/env"
+  grep -qx 'C:\\Program Files\\VS\\lib' "$workspace/env"
+  grep -qx 'C:\\VS\\bin;C:\\Windows' "$workspace/env"
+  ! grep -q 'KW_CONFIG\|TEMP\|=C:' "$workspace/env"
+  ! grep -q $'\r' "$workspace/env"
+}
+
+@test "a variable cmd.exe cut off is never handed on" {
+  # cmd.exe cuts a variable off at 8191 characters and runs the next one into it, so the same
+  # long variable reads differently before and after vcvarsall.bat.
+  cut="KW_CONFIG={\"native\":{\"stage-directory\":\"build/kreate/jni-stag$(printf 'x%.0s' $(seq 1 8160))"
+  dump "$workspace/before" "${cut}LOCALAPPDATA=C:\\Users\\runner" 'Path=C:\Windows'
+  dump "$workspace/after" "${cut}LIB=C:\\Program Files\\VS\\lib" 'Path=C:\VS\bin;C:\Windows'
+  : >"$workspace/env"
+  KW_BEFORE="$workspace/before" KW_AFTER="$workspace/after" GITHUB_ENV="$workspace/env" \
+    run "$repository_root/actions/setup/msvc-env.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error::KW_CONFIG is "*" characters long after vcvarsall.bat"* ]]
+  [ ! -s "$workspace/env" ]
+}
+
 # --- stage ------------------------------------------------------------------------------------
 
 @test "the stage of a runner is kept when it holds its platform" {

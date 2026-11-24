@@ -95,6 +95,80 @@ jobs:
             exit 1
           fi
 
+  # cmd.exe cuts off a variable of 8191 characters or more, and the resolved configuration of a
+  # real project is that long. Setting up Visual Studio has to leave such a variable as it is.
+  # The plan runs on Linux, as in every workflow: it needs yq.
+  long-variable-plan:
+    name: Plan a configuration with a long variable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write a configuration with a long variable
+        id: long
+        run: |
+          padding="$(printf 'x%.0s' $(seq 1 9000))"
+          {
+            echo "config<<KW_CONFIG_END"
+            echo "working-directory: fixtures/library"
+            echo "tools: { msvc: true }"
+            echo "env: { KOTLIN_WORKFLOW_PADDING: $padding }"
+            echo "KW_CONFIG_END"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config: ${{ steps.long.outputs.config }}
+          token: ${{ github.token }}
+
+  long-variable:
+    name: Visual Studio next to a long variable
+    needs: long-variable-plan
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      KW_CONFIG: ${{ needs.long-variable-plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: disabled
+
+      # The configuration is read again, as the steps of check.yml read it after the setup.
+      - name: Expect the long variables whole and the compiler on the PATH
+        shell: bash
+        env:
+          KW_WORKING_DIRECTORY: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+        run: |
+          if [ "${#KOTLIN_WORKFLOW_PADDING}" -ne 9000 ]; then
+            echo "::error::KOTLIN_WORKFLOW_PADDING is ${#KOTLIN_WORKFLOW_PADDING} characters long, not 9000."
+            exit 1
+          fi
+          if [ "$KW_WORKING_DIRECTORY" != "fixtures/library" ]; then
+            echo "::error::KW_CONFIG did not survive the setup."
+            exit 1
+          fi
+          command -v cl.exe
+
   # Two runners from one line of configuration, and a release that is only rehearsed. The release
   # builds natives on Linux and Windows with a stand-in for kreateJniStage and hands them to the
   # build it rehearses; the Windows runner sets up Visual Studio first.

@@ -17,7 +17,7 @@ your project. The part that matters:
 ```yaml
 jobs:
   pipeline:
-    uses: davils-com/kotlin-workflow/.github/workflows/pipeline.yml@COMMIT # v1.1.0
+    uses: davils-com/kotlin-workflow/.github/workflows/pipeline.yml@COMMIT # v1.1.1
     permissions:
       contents: write
       actions: write

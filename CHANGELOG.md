@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.1
+
+### Fixed
+
+- **Setting up Visual Studio leaves long variables alone.** cmd.exe prints no variable of 8191
+  characters or more in full; it cuts it off and runs the next one into it. The resolved
+  configuration of a project with `native` is that long, so `tools.msvc` read it as changed by
+  `vcvarsall.bat` and handed the cut-off value to every later step, where the check of the
+  Windows runner failed with "Bad JSON escape sequence". Such variables are now kept away from
+  cmd.exe, and only what `vcvarsall.bat` changed in the environment of cmd.exe is handed on.
+
 ## 1.1.0
 
 ### Added

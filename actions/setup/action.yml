@@ -49,11 +49,21 @@ runs:
 
     # Before the installation, which then finds the CMake and the Ninja of Visual Studio.
     - name: Set up the developer environment of Visual Studio
+      id: msvc
       if: inputs.tools != 'false' && runner.os == 'Windows' && fromJSON(steps.tools.outputs.tools).msvc
       shell: pwsh
       env:
         KW_ACTION_PATH: ${{ github.action_path }}
       run: '& "$env:KW_ACTION_PATH/msvc.ps1"'
+
+    - name: Hand the developer environment of Visual Studio on
+      if: steps.msvc.outcome == 'success'
+      shell: bash
+      env:
+        KW_ACTION_PATH: ${{ github.action_path }}
+        KW_BEFORE: ${{ steps.msvc.outputs.before }}
+        KW_AFTER: ${{ steps.msvc.outputs.after }}
+      run: '"$KW_ACTION_PATH/msvc-env.sh"'
 
     - name: Install native tools
       if: inputs.tools != 'false'
