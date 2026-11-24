@@ -97,7 +97,7 @@ Every stage workflow takes the same `config-file` and `config` inputs and plans 
 ```yaml
 jobs:
   check:
-    uses: davils-com/kotlin-workflow/.github/workflows/check.yml@COMMIT # v1.0.0
+    uses: davils-com/kotlin-workflow/.github/workflows/check.yml@COMMIT # v1.1.0
     permissions:
       contents: read
       security-events: write
