@@ -121,7 +121,7 @@ jobs:
           {
             echo "config<<KW_CONFIG_END"
             echo "working-directory: fixtures/library"
-            echo "tools: { msvc: true, clang-tidy: true }"
+            echo "tools: { msvc: true, clang-tidy: true, cmake: true, ninja: true }"
             echo "env: { KOTLIN_WORKFLOW_PADDING: $padding }"
             echo "KW_CONFIG_END"
           } >>"$GITHUB_OUTPUT"
@@ -191,6 +191,26 @@ jobs:
           clang-tidy --version
           clang-tidy $source '--checks=-*,bugprone-use-after-move' -- cl.exe /EHsc /std:c++20 /W4
           if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # The LLVM of Visual Studio carries clang and clang++ next to its clang-tidy. A CMake build
+      # next to Visual Studio still has to compile with cl, as a JNI library of Kreate does.
+      - name: Expect CMake to compile with cl
+        shell: pwsh
+        run: |
+          $project = Join-Path $env:RUNNER_TEMP 'kotlin-workflow-cmake'
+          New-Item -ItemType Directory -Force -Path $project | Out-Null
+          Set-Content -Path (Join-Path $project 'CMakeLists.txt') -Encoding ascii -Value @(
+            'cmake_minimum_required(VERSION 3.20)'
+            'project(probe CXX)'
+          )
+          cmake -G Ninja -S $project -B (Join-Path $project 'build')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $compiler = (Select-String -Path (Join-Path $project 'build/CMakeCache.txt') -Pattern '^CMAKE_CXX_COMPILER:').Line
+          $compiler
+          if ($compiler -notmatch 'cl\.exe$') {
+            Write-Output "::error::CMake compiles with $compiler, not with cl.exe."
+            exit 1
+          }
 
   # Two runners from one line of configuration, and a release that is only rehearsed. The release
   # builds natives on Linux and Windows with a stand-in for kreateJniStage and hands them to the
