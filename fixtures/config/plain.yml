@@ -1,0 +1,9 @@
+# A project without natives, as every project was before the native stage existed.
+# tests/native.bats plans with it and expects nothing of the native stage.
+version: 1
+
+tools:
+  cmake: true
+
+check:
+  primary-tasks: [koverXmlReport]

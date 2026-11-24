@@ -8,6 +8,9 @@ inputs:
   tasks:
     description: A JSON list of upload tasks, run in order.
     required: true
+  args:
+    description: A JSON list of arguments of every upload. Empty takes gradle.args of the configuration.
+    default: ''
   snapshot:
     description: true publishes a snapshot, which is never signed.
     default: 'false'
@@ -36,6 +39,7 @@ runs:
         KW_ACTION_PATH: ${{ github.action_path }}
         KW_CONFIG: ${{ inputs.config }}
         KW_TASKS: ${{ inputs.tasks }}
+        KW_ARGS: ${{ inputs.args }}
         KW_SNAPSHOT: ${{ inputs.snapshot }}
         KW_MAVEN_USERNAME: ${{ inputs.maven-username }}
         KW_MAVEN_PASSWORD: ${{ inputs.maven-password }}

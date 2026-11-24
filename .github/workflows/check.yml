@@ -148,6 +148,21 @@ jobs:
           name: check-reports-${{ matrix.name }}
           summary: ${{ matrix.primary }}
 
+  # With `check` in native.stages the natives are built as for a release, and nothing is kept.
+  native:
+    name: Natives
+    needs: plan
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure'
+          && contains(fromJSON(inputs.plan || needs.plan.outputs.config).run.native-stages, 'check') }}
+    uses: $/.github/workflows/native.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      plan: ${{ inputs.plan || needs.plan.outputs.config }}
+      upload: false
+
   reproducible:
     name: Reproducible build
     needs: plan

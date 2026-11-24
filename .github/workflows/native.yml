@@ -1,0 +1,130 @@
+name: Native
+
+# Builds the native libraries of a project on a runner of every platform of native.runners, each
+# with native.stage-task, and keeps each stage as the artifact kotlin-workflow-native-<platform>
+# for the publishing job of the same run. snapshot.yml and release.yml call it before they upload,
+# check.yml to try the native build without keeping anything.
+#
+# This workflow declares no secret, so none can reach the code it builds. It restores no Gradle
+# cache either: what a cache restores was written by another job, and the libraries built here are
+# published as they are.
+#
+# The caller grants: contents: read, pull-requests: read.
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The resolved configuration, when the caller already planned the run.
+        type: string
+        default: ''
+      config-file:
+        description: The project's configuration file.
+        type: string
+        default: .github/kotlin-workflow.yml
+      config:
+        description: Inline YAML merged over the project's configuration file.
+        type: string
+        default: ''
+      snapshot:
+        description: Builds the natives of a snapshot, with KREATE_SNAPSHOT=true unless snapshot.kreate-snapshot is off.
+        type: boolean
+        default: false
+      version:
+        description: The version a release publishes, handed to the build in release.version-env.
+        type: string
+        default: ''
+      upload:
+        description: Keeps every stage as an artifact for the publishing job of the run.
+        type: boolean
+        default: true
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    if: inputs.plan == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      config: ${{ steps.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        uses: $/actions/plan
+        with:
+          config-file: ${{ inputs.config-file }}
+          config: ${{ inputs.config }}
+          token: ${{ github.token }}
+
+  stage:
+    name: Natives (${{ matrix.platform }})
+    needs: plan
+    if: >-
+      ${{ !cancelled() && needs.plan.result != 'failure'
+          && fromJSON(inputs.plan || needs.plan.outputs.config).native.runners[0] != null }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).timeout.native }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.plan || needs.plan.outputs.config).native.runners }}
+    env:
+      KW_CONFIG: ${{ inputs.plan || needs.plan.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: $/actions/setup
+        with:
+          config: ${{ env.KW_CONFIG }}
+          cache: disabled
+          tools: native
+
+      # The stage names its version, and the publishing build refuses a stage of another version.
+      - name: Mark the build as a snapshot
+        if: ${{ inputs.snapshot && fromJSON(env.KW_CONFIG).snapshot.kreate-snapshot }}
+        run: echo "KREATE_SNAPSHOT=true" >>"$GITHUB_ENV"
+
+      - name: Tell the build its version
+        if: inputs.version != ''
+        env:
+          KW_VERSION: ${{ inputs.version }}
+        run: |
+          name="$(jq --raw-output '.release["version-env"]' <<<"$KW_CONFIG" | tr -d '\r')"
+          if [ -n "$name" ]; then echo "$name=$KW_VERSION" >>"$GITHUB_ENV"; fi
+
+      # The token of this job only reads, so the build may ask the GitHub API with it.
+      - name: Build and stage the natives
+        uses: $/actions/gradle
+        with:
+          invocations: ${{ format('[[{0}]]', toJSON(fromJSON(env.KW_CONFIG).native.stage-task)) }}
+          args: ${{ toJSON(fromJSON(env.KW_CONFIG).gradle.args) }}
+          configuration-cache: ${{ fromJSON(env.KW_CONFIG).gradle.configuration-cache }}
+          working-directory: ${{ fromJSON(env.KW_CONFIG).working-directory }}
+          github-token: ${{ github.token }}
+
+      - name: Check and keep the stage
+        uses: $/actions/native-stage
+        with:
+          config: ${{ env.KW_CONFIG }}
+          platform: ${{ matrix.platform }}
+          upload: ${{ inputs.upload }}

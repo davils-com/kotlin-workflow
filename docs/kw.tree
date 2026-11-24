@@ -10,6 +10,7 @@
     <toc-element topic="Getting-Started.md"/>
     <toc-element topic="Configuration.md"/>
     <toc-element topic="Workflows.md"/>
+    <toc-element topic="Native-Libraries.md"/>
     <toc-element topic="Dependency-Updates.md"/>
     <toc-element topic="Security.md"/>
     <toc-element topic="Cost.md"/>

@@ -68,9 +68,21 @@ graph only, and the schedule everything.
 Permissions: `contents: write` for the dependency graph, otherwise `read`;
 `security-events: write`; `pull-requests: read`. No secrets.
 
+## native.yml
+
+Builds the native libraries of a project on one runner per platform of `native.runners` and keeps
+each stage as the artifact `kotlin-workflow-native-<platform>`. `snapshot.yml` and `release.yml`
+call it before they publish, and `check.yml` when `native.stages` lists `check`; a project without
+`native.runners` never starts it. See [Native libraries](Native-Libraries.md).
+
+Inputs: `plan`, `config-file`, `config`, `snapshot`, `version`, `upload`.
+
+Permissions: `contents: read`, `pull-requests: read`. No secrets.
+
 ## snapshot.yml
 
-Builds `publish.build-tasks` without any secret, then runs `publish.tasks` one by one with the
+With `native.runners`, the natives are built first and collected by the publishing job; see
+[Native libraries](Native-Libraries.md). Builds `publish.build-tasks` without any secret, then runs `publish.tasks` one by one with the
 repository token, with `KREATE_SNAPSHOT=true` unless `snapshot.kreate-snapshot` is off. The job
 runs in the environment `snapshot.environment`; restrict that environment to the development
 branch. Uploads never run in parallel and are never cancelled. `snapshot.smoke` builds a
@@ -95,6 +107,7 @@ Permissions: `contents: read`, `pull-requests: read`. Secrets: `MAVEN_USERNAME`,
 | Job | Does |
 |---|---|
 | Gate | The tag is on `release.gate.branch`, equals the version in `release.gate.version-file`, and is no snapshot |
+| Natives | With `native.runners`: builds the natives of the version on a runner per platform, see [Native libraries](Native-Libraries.md) |
 | Preflight | Lists the publications and looks each one up in the releases repository, without credentials |
 | Publish | Builds without secrets, uploads the missing publications signed, attests provenance and an SBOM. Runs in `release.environment`, which is the approval gate |
 | Smoke | Downloads every file as a consumer, verifies the attestations, optionally builds a consumer project |

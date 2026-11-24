@@ -18,7 +18,9 @@ ten times a Linux minute and a Windows minute nearly twice, so the defaults lean
 | Full security scan | weekly | the cron of the caller, `policy.schedule` |
 | Pull request security | dependency review only, no JDK | `policy.pull-request.overrides` |
 | Dependabot repairs | only for a Dependabot pull request that changes the version catalog | `dependencies.catalog`, `dependencies.triggers` |
-| Time limit | 45 minutes for check and release, less elsewhere | `timeout` |
+| Native runners | none; with `native.runners` one job per platform, for snapshots and releases only, after the check and, for a release, after the gate | `native.stages` |
+| Native stages | kept 7 days, long enough for an approval | `retention.native` |
+| Time limit | 45 minutes for check, release and native runners, less elsewhere | `timeout` |
 
 The plan job is the only fixed cost of a run: a checkout and two scripts on Linux.
 
