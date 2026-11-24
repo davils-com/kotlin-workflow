@@ -96,7 +96,8 @@ jobs:
           fi
 
   # cmd.exe cuts off a variable of 8191 characters or more, and the resolved configuration of a
-  # real project is that long. Setting up Visual Studio has to leave such a variable as it is.
+  # real project is that long. Setting up Visual Studio has to leave such a variable as it is,
+  # and its clang-tidy has to be the one that reads its STL.
   # The plan runs on Linux, as in every workflow: it needs yq.
   long-variable-plan:
     name: Plan a configuration with a long variable
@@ -120,7 +121,7 @@ jobs:
           {
             echo "config<<KW_CONFIG_END"
             echo "working-directory: fixtures/library"
-            echo "tools: { msvc: true }"
+            echo "tools: { msvc: true, clang-tidy: true }"
             echo "env: { KOTLIN_WORKFLOW_PADDING: $padding }"
             echo "KW_CONFIG_END"
           } >>"$GITHUB_OUTPUT"
@@ -168,6 +169,27 @@ jobs:
             exit 1
           fi
           command -v cl.exe
+
+      # clang-tidy reads the STL of Visual Studio, which refuses a Clang older than its own. The
+      # file uses the STL and exceptions, as a JNI library does, and is checked the way CMake's
+      # CXX_CLANG_TIDY checks it next to cl.
+      - name: Expect clang-tidy to read the STL of Visual Studio
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'kotlin-workflow-tidy.cpp'
+          Set-Content -Path $source -Encoding ascii -Value @(
+            '#include <string>'
+            '#include <vector>'
+            'int main() {'
+            '    std::vector<std::string> names;'
+            '    try { names.emplace_back("pipe"); } catch (...) { throw; }'
+            '    return static_cast<int>(names.size());'
+            '}'
+          )
+          (Get-Command clang-tidy).Source
+          clang-tidy --version
+          clang-tidy $source '--checks=-*' '--extra-arg-before=--driver-mode=cl' -- /EHsc /std:c++20 /W4
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
   # Two runners from one line of configuration, and a release that is only rehearsed. The release
   # builds natives on Linux and Windows with a stand-in for kreateJniStage and hands them to the
